@@ -105,7 +105,8 @@ export interface WidgetOption {
     | "timezone"
     | "thresholds"
     | "progress_items"
-    | "status_entities";
+    | "status_entities"
+    | "image_entity_list";
   label: string;
   default?: unknown;
   options?: string[];

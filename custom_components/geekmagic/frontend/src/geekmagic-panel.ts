@@ -1464,6 +1464,9 @@ export class GeekMagicPanel extends LitElement {
       case "status_entities":
         return this._renderStatusEntitiesEditor(slot, opt.key, value as StatusEntity[] | undefined);
 
+      case "image_entity_list":
+        return this._renderImageEntityListEditor(slot, opt.key, value as string[] | undefined);
+
       case "timezone":
         return html`
           <div class="option-field">
@@ -1833,6 +1836,71 @@ export class GeekMagicPanel extends LitElement {
               Add Status Entity
             </div>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderImageEntityListEditor(
+    slot: number,
+    key: string,
+    entityIds: string[] | undefined
+  ) {
+    const ids = entityIds || [];
+    const MAX_ITEMS = 32;
+
+    return html`
+      <div class="option-field">
+        <div class="array-editor">
+          <div class="array-editor-header">
+            <span>Images (${ids.length} / ${MAX_ITEMS})</span>
+          </div>
+          <div class="array-items">
+            ${ids.map(
+              (entityId, idx) => html`
+                <div
+                  class="array-item"
+                  style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;"
+                >
+                  <ha-selector
+                    style="flex: 1;"
+                    .hass=${this.hass}
+                    .selector=${{ entity: { domain: "image" } }}
+                    .value=${entityId}
+                    .label=${"Image " + (idx + 1)}
+                    @value-changed=${(e: CustomEvent) => {
+                      const newIds = [...ids];
+                      newIds[idx] = e.detail.value;
+                      this._updateWidgetOption(slot, key, newIds);
+                    }}
+                  ></ha-selector>
+                  <ha-icon-button
+                    .path=${"M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"}
+                    @click=${() => {
+                      this._updateWidgetOption(
+                        slot,
+                        key,
+                        ids.filter((_, i) => i !== idx)
+                      );
+                    }}
+                  ></ha-icon-button>
+                </div>
+              `
+            )}
+          </div>
+          ${ids.length < MAX_ITEMS
+            ? html`
+                <div
+                  class="add-item-button"
+                  @click=${() => {
+                    this._updateWidgetOption(slot, key, [...ids, ""]);
+                  }}
+                >
+                  <ha-icon icon="mdi:plus"></ha-icon>
+                  Add Image
+                </div>
+              `
+            : nothing}
         </div>
       </div>
     `;

@@ -10,6 +10,7 @@ from .entity import EntityWidget
 from .gauge import GaugeWidget
 from .icon import IconWidget
 from .media import MediaWidget
+from .picture import PictureWidget
 from .progress import MultiProgressWidget, ProgressWidget
 from .status import StatusListWidget, StatusWidget
 from .text import TextWidget
@@ -25,6 +26,7 @@ __all__ = [
     "GaugeWidget",
     "IconWidget",
     "MediaWidget",
+    "PictureWidget",
     "MultiProgressWidget",
     "ProgressWidget",
     "StatusListWidget",

@@ -85,6 +85,7 @@ from .widgets.entity import EntityWidget
 from .widgets.gauge import GaugeWidget
 from .widgets.icon import IconWidget
 from .widgets.media import MediaWidget
+from .widgets.picture import PictureWidget
 from .widgets.progress import MultiProgressWidget, ProgressWidget
 from .widgets.state import EntityState, WidgetState
 from .widgets.status import StatusListWidget, StatusWidget
@@ -139,6 +140,7 @@ WIDGET_CLASSES = {
     "status_list": StatusListWidget,
     "weather": WeatherWidget,
     "icon": IconWidget,
+    "picture": PictureWidget,
 }
 
 
@@ -221,6 +223,8 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         self._media_images: dict[str, bytes] = {}  # Pre-fetched media player album art
         self._chart_history: dict[str, list[float]] = {}  # Pre-fetched chart history
         self._weather_forecasts: dict[str, list[dict[str, Any]]] = {}  # Pre-fetched forecasts
+        self._picture_images: dict[int, bytes] = {}  # Pre-fetched picture images keyed by slot
+        self._picture_cycle_indices: dict[int, int] = {}  # Cycle index per slot
         self._update_preview: bool = True  # Update preview on next refresh
         self._preview_just_updated: bool = False  # True if preview was updated in last refresh
 
@@ -674,6 +678,11 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 if image_bytes:
                     with contextlib.suppress(Exception):
                         image = Image.open(BytesIO(image_bytes))
+            elif isinstance(widget, PictureWidget):
+                picture_bytes = self._picture_images.get(slot.index)
+                if picture_bytes:
+                    with contextlib.suppress(Exception):
+                        image = Image.open(BytesIO(picture_bytes))
 
             # Get pre-fetched weather forecast
             forecast: list[dict[str, Any]] = []
@@ -987,6 +996,7 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
             await self._async_fetch_media_images()
             await self._async_fetch_chart_history()
             await self._async_fetch_weather_forecasts()
+            await self._async_fetch_picture_images()
 
             # Render image in executor to avoid blocking the event loop
             # (Pillow image operations are CPU-intensive)
@@ -1319,6 +1329,79 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                     )
             except Exception as e:
                 _LOGGER.debug("Failed to fetch camera image for %s: %s", entity_id, e)
+
+    async def _async_fetch_picture_images(self) -> None:
+        """Pre-fetch images for picture widgets, advancing the per-slot cycle index.
+
+        On each update cycle the active entity advances so that each configured
+        image is shown in turn.
+        """
+        if not self._layouts or not (0 <= self._current_screen < len(self._layouts)):
+            return
+
+        layout = self._layouts[self._current_screen]
+        for slot in layout.slots:
+            if not slot.widget or not isinstance(slot.widget, PictureWidget):
+                continue
+
+            widget: PictureWidget = slot.widget
+            entity_ids = widget.entity_ids
+            if not entity_ids:
+                self._picture_images.pop(slot.index, None)
+                continue
+
+            # Determine which entity to show this cycle
+            current_idx = self._picture_cycle_indices.get(slot.index, 0) % len(entity_ids)
+            entity_id = entity_ids[current_idx]
+
+            # Advance index for the next cycle
+            self._picture_cycle_indices[slot.index] = (current_idx + 1) % len(entity_ids)
+
+            # Fetch image bytes: use HA image platform API for image.* entities,
+            # fall back to entity_picture URL for anything else
+            image_bytes: bytes | None = None
+            if entity_id.startswith("image."):
+                try:
+                    from homeassistant.components.image import async_get_image
+
+                    img = await async_get_image(self.hass, entity_id)
+                    if img and img.content:
+                        image_bytes = img.content
+                except Exception as e:
+                    _LOGGER.debug("Failed to fetch picture image for %s: %s", entity_id, e)
+            else:
+                # Generic entity: fetch via entity_picture attribute URL
+                state = self.hass.states.get(entity_id)
+                if state:
+                    image_url = state.attributes.get("entity_picture")
+                    if image_url and image_url.startswith("/"):
+                        base_url = self.hass.config.internal_url or getattr(
+                            self.hass.config, "external_url", None
+                        )
+                        if base_url:
+                            full_url = f"{base_url.rstrip('/')}/{image_url.lstrip('/')}"
+                            try:
+                                session = async_get_clientsession(self.hass)
+                                async with session.get(full_url, timeout=10) as response:
+                                    if response.status == 200:
+                                        image_bytes = await response.read()
+                            except Exception as e:
+                                _LOGGER.debug(
+                                    "Failed to fetch picture entity_picture for %s: %s",
+                                    entity_id,
+                                    e,
+                                )
+
+            if image_bytes:
+                self._picture_images[slot.index] = image_bytes
+                _LOGGER.debug(
+                    "Fetched picture image for slot %d (%s): %d bytes",
+                    slot.index,
+                    entity_id,
+                    len(image_bytes),
+                )
+            else:
+                self._picture_images.pop(slot.index, None)
 
     async def _async_fetch_url_image_to_cache(self, source: str) -> None:
         """Fetch image from entity_picture and save to camera image cache.
