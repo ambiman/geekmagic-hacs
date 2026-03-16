@@ -61,6 +61,7 @@ from custom_components.geekmagic.widgets import (
     GaugeWidget,
     MediaWidget,
     MultiProgressWidget,
+    PictureWidget,
     ProgressWidget,
     StatusListWidget,
     StatusWidget,
@@ -269,6 +270,63 @@ def create_fake_album_art(size: int = 300) -> Image.Image:
     return img.filter(ImageFilter.GaussianBlur(radius=1))
 
 
+def create_fake_photo(size: int = 300) -> Image.Image:
+    """Create a fake photo image simulating a camera snapshot (e.g. a doorbell).
+
+    Returns:
+        PIL Image
+    """
+    from PIL import ImageDraw, ImageFilter
+
+    img = Image.new("RGB", (size, size))
+    draw = ImageDraw.Draw(img)
+
+    # Sky gradient (top → bottom: deep blue → lighter blue)
+    sky_colors = [(20, 60, 120), (80, 140, 200)]
+    for y in range(size * 2 // 3):
+        t = y / (size * 2 // 3)
+        r = int(sky_colors[0][0] + (sky_colors[1][0] - sky_colors[0][0]) * t)
+        g = int(sky_colors[0][1] + (sky_colors[1][1] - sky_colors[0][1]) * t)
+        b = int(sky_colors[0][2] + (sky_colors[1][2] - sky_colors[0][2]) * t)
+        draw.line([(0, y), (size, y)], fill=(r, g, b))
+
+    # Ground (bottom third, dark green)
+    draw.rectangle([0, size * 2 // 3, size, size], fill=(40, 80, 40))
+
+    # Simple house silhouette
+    house_left = size // 4
+    house_right = size * 3 // 4
+    house_bottom = size * 2 // 3
+    house_top = size * 2 // 5
+    roof_peak = (size // 2, size // 5)
+
+    draw.rectangle([house_left, house_top, house_right, house_bottom], fill=(80, 60, 50))
+    draw.polygon(
+        [house_left, house_top, house_right, house_top, roof_peak[0], roof_peak[1]],
+        fill=(120, 40, 30),
+    )
+    # Door
+    door_w = size // 10
+    door_h = size // 7
+    door_x = size // 2 - door_w // 2
+    draw.rectangle(
+        [door_x, house_bottom - door_h, door_x + door_w, house_bottom], fill=(50, 30, 20)
+    )
+    # Window
+    win_size = size // 10
+    draw.rectangle(
+        [
+            house_left + size // 8,
+            house_top + size // 12,
+            house_left + size // 8 + win_size,
+            house_top + size // 12 + win_size,
+        ],
+        fill=(220, 210, 160),
+    )
+
+    return img.filter(ImageFilter.GaussianBlur(radius=0.5))
+
+
 def generate_widget_sizes(renderer: Renderer, output_dir: Path) -> None:
     """Generate full 240x240 layouts showing each widget type in different grid sizes."""
     from custom_components.geekmagic.layouts.grid import Grid3x3
@@ -343,8 +401,16 @@ def generate_widget_sizes(renderer: Renderer, output_dir: Path) -> None:
         },
     )
 
+    hass.states.set(
+        "image.front_door",
+        "idle",
+        {"friendly_name": "Front Door"},
+    )
+
     # Create fake album art for media widget
     media_album_art = create_fake_album_art(300)
+    # Create fake photo for picture widget
+    picture_photo = create_fake_photo(300)
 
     def make_gauge_bar(slot: int) -> GaugeWidget:
         return GaugeWidget(
@@ -507,6 +573,17 @@ def generate_widget_sizes(renderer: Renderer, output_dir: Path) -> None:
             )
         )
 
+    def make_picture(slot: int) -> PictureWidget:
+        return PictureWidget(
+            WidgetConfig(
+                widget_type="picture",
+                slot=slot,
+                label="Front Door",
+                color=COLOR_WHITE,
+                options={"entity_ids": ["image.front_door"], "fit": "contain", "show_label": True},
+            )
+        )
+
     def make_attribute_list(slot: int) -> AttributeListWidget:
         return AttributeListWidget(
             WidgetConfig(
@@ -548,6 +625,7 @@ def generate_widget_sizes(renderer: Renderer, output_dir: Path) -> None:
         ("media", make_media),
         ("climate", make_climate),
         ("attribute_list", make_attribute_list),
+        ("picture", make_picture),
     ]
 
     # Layout configs: (suffix, layout_class, num_slots, padding, gap)
@@ -586,11 +664,14 @@ def generate_widget_sizes(renderer: Renderer, output_dir: Path) -> None:
                 for i in range(num_slots):
                     slot_chart_history[i] = chart_histories[widget_name]
 
-            # Build images dict for media widgets
+            # Build images dict for media/picture widgets
             slot_images: dict[int, Image.Image] = {}
             if widget_name == "media":
                 for i in range(num_slots):
                     slot_images[i] = media_album_art
+            elif widget_name == "picture":
+                for i in range(num_slots):
+                    slot_images[i] = picture_photo
 
             layout.render(
                 renderer,

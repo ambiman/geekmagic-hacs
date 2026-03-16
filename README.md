@@ -87,6 +87,7 @@ Entities like lights, switches, and fans show different icons based on their sta
 | **Chart** | <img src="samples/widgets/chart_1x1.png"> | <img src="samples/widgets/chart_1x2.png"> | <img src="samples/widgets/chart_2x1.png"> | <img src="samples/widgets/chart_2x2.png"> | <img src="samples/widgets/chart_2x3.png"> | <img src="samples/widgets/chart_3x3.png"> |
 | **Climate** | <img src="samples/widgets/climate_1x1.png"> | <img src="samples/widgets/climate_1x2.png"> | <img src="samples/widgets/climate_2x1.png"> | <img src="samples/widgets/climate_2x2.png"> | <img src="samples/widgets/climate_2x3.png"> | <img src="samples/widgets/climate_3x3.png"> |
 | **Attribute List** | <img src="samples/widgets/attribute_list_1x1.png"> | <img src="samples/widgets/attribute_list_1x2.png"> | <img src="samples/widgets/attribute_list_2x1.png"> | <img src="samples/widgets/attribute_list_2x2.png"> | <img src="samples/widgets/attribute_list_2x3.png"> | <img src="samples/widgets/attribute_list_3x3.png"> |
+| **Picture** | <img src="samples/widgets/picture_1x1.png"> | <img src="samples/widgets/picture_1x2.png"> | <img src="samples/widgets/picture_2x1.png"> | <img src="samples/widgets/picture_2x2.png"> | <img src="samples/widgets/picture_2x3.png"> | <img src="samples/widgets/picture_3x3.png"> |
 
 ## Layout Examples
 
@@ -156,7 +157,7 @@ Choose from **10 built-in themes** that go beyond just colors - affecting typogr
 
 ## Features
 
-- **14 widget types**: Clock, entity, attribute list, media, chart, text, gauge, progress, weather, status, climate, camera, and more
+- **15 widget types**: Clock, entity, attribute list, media, chart, text, gauge, progress, weather, status, climate, camera, picture, and more
 - **19 layout options**: Fullscreen, grids, splits, hero variants, sidebars, and more
 - **10 visual themes**: Classic, Minimal, Neon, Retro, Soft, Light, Ocean, Sunset, Forest, Candy
 - **Visual configuration**: Custom sidebar panel with live preview
@@ -339,6 +340,7 @@ data:
 | `status` | Binary sensor indicator |
 | `chart` | Sparkline from entity history |
 | `camera` | Camera snapshot display |
+| `picture` | HA image entity display with optional multi-image cycling (`fit: contain/cover`, `show_label`) |
 | `media` | Now playing from media player |
 | `multi_progress` | Multiple progress items |
 | `status_list` | Multiple status indicators |
