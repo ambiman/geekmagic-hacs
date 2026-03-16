@@ -1865,7 +1865,7 @@ export class GeekMagicPanel extends LitElement {
                   <ha-selector
                     style="flex: 1;"
                     .hass=${this.hass}
-                    .selector=${{ entity: { domain: "image" } }}
+                    .selector=${{ entity: { domain: ["image", "camera"] } }}
                     .value=${entityId}
                     .label=${"Image " + (idx + 1)}
                     @value-changed=${(e: CustomEvent) => {

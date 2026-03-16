@@ -1581,7 +1581,7 @@ let g = class extends O {
                   <ha-selector
                     style="flex: 1;"
                     .hass=${this.hass}
-                    .selector=${{ entity: { domain: "image" } }}
+                    .selector=${{ entity: { domain: ["image", "camera"] } }}
                     .value=${a}
                     .label=${"Image " + (o + 1)}
                     @value-changed=${(l) => {

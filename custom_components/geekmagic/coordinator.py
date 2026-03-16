@@ -1357,8 +1357,8 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
             # Advance index for the next cycle
             self._picture_cycle_indices[slot.index] = (current_idx + 1) % len(entity_ids)
 
-            # Fetch image bytes: use HA image platform API for image.* entities,
-            # fall back to entity_picture URL for anything else
+            # Fetch image bytes: use HA image/camera platform APIs for known entity
+            # domains, fall back to entity_picture URL for anything else
             image_bytes: bytes | None = None
             if entity_id.startswith("image."):
                 try:
@@ -1369,6 +1369,15 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                         image_bytes = img.content
                 except Exception as e:
                     _LOGGER.debug("Failed to fetch picture image for %s: %s", entity_id, e)
+            elif entity_id.startswith("camera."):
+                try:
+                    from homeassistant.components.camera import async_get_image as camera_get_image
+
+                    img = await camera_get_image(self.hass, entity_id)
+                    if img and img.content:
+                        image_bytes = img.content
+                except Exception as e:
+                    _LOGGER.debug("Failed to fetch picture camera image for %s: %s", entity_id, e)
             else:
                 # Generic entity: fetch via entity_picture attribute URL
                 state = self.hass.states.get(entity_id)
