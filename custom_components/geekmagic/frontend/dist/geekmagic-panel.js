@@ -1579,7 +1579,7 @@ let g = class extends O {
                   style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;"
                 >
                   <ha-selector
-                    style="flex: 1;"
+                    style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
                     .selector=${{ entity: { domain: ["image", "camera"] } }}
                     .value=${a}
