@@ -1934,7 +1934,7 @@ export class GeekMagicPanel extends LitElement {
                   <ha-selector
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
-                    .selector=${{ image: {} }}
+                    .selector=${{ media: { accept: ["image/*"], clearable: true } }}
                     .value=${path || ""}
                     .label=${"Image " + (idx + 1)}
                     @value-changed=${(e: CustomEvent) => {

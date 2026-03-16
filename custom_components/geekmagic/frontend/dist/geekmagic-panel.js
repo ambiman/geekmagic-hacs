@@ -1639,7 +1639,7 @@ let g = class extends O {
                   <ha-selector
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
-                    .selector=${{ image: {} }}
+                    .selector=${{ media: { accept: ["image/*"], clearable: !0 } }}
                     .value=${a || ""}
                     .label=${"Image " + (o + 1)}
                     @value-changed=${(l) => {
