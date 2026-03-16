@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
+from PIL import Image, ImageDraw
+
 from .const import (
     CONF_LAYOUT,
     CONF_WIDGETS,
@@ -42,11 +44,13 @@ from .layouts.split import (
 from .renderer import Renderer
 from .widgets.attribute_list import AttributeListWidget
 from .widgets.base import WidgetConfig
+from .widgets.camera import CameraWidget
 from .widgets.chart import ChartWidget
 from .widgets.clock import ClockWidget
 from .widgets.entity import EntityWidget
 from .widgets.gauge import GaugeWidget
 from .widgets.media import MediaWidget
+from .widgets.picture import PictureWidget
 from .widgets.progress import MultiProgressWidget, ProgressWidget
 from .widgets.state import EntityState, WidgetState
 from .widgets.status import StatusListWidget, StatusWidget
@@ -78,10 +82,12 @@ LAYOUT_CLASSES = {
 
 WIDGET_CLASSES = {
     "attribute_list": AttributeListWidget,
+    "camera": CameraWidget,
     "clock": ClockWidget,
     "entity": EntityWidget,
     "media": MediaWidget,
     "chart": ChartWidget,
+    "picture": PictureWidget,
     "text": TextWidget,
     "gauge": GaugeWidget,
     "progress": ProgressWidget,
@@ -90,6 +96,22 @@ WIDGET_CLASSES = {
     "status_list": StatusListWidget,
     "weather": WeatherWidget,
 }
+
+
+def _make_preview_placeholder_image() -> Image.Image:
+    """Create a simple placeholder image for picture/camera widget previews."""
+    size = 240
+    img = Image.new("RGB", (size, size), color=(30, 30, 40))
+    draw = ImageDraw.Draw(img)
+    # Draw a camera icon outline as a simple visual indicator
+    cx, cy = size // 2, size // 2
+    # Camera body
+    draw.rectangle([cx - 50, cy - 30, cx + 50, cy + 35], outline=(120, 120, 140), width=3)
+    # Lens circle
+    draw.ellipse([cx - 22, cy - 22, cx + 22, cy + 22], outline=(120, 120, 140), width=3)
+    # Viewfinder bump
+    draw.rectangle([cx - 15, cy - 42, cx + 15, cy - 30], outline=(120, 120, 140), width=3)
+    return img
 
 
 @dataclass
@@ -335,12 +357,18 @@ def _build_widget_state_for_preview(
             },
         ]
 
+    # Provide a placeholder image for picture/camera widgets so they don't
+    # render as "No Image" in the preview panel.
+    preview_image: Image.Image | None = None
+    if widget_type in ("picture", "camera"):
+        preview_image = _make_preview_placeholder_image()
+
     return WidgetState(
         entity=entity,
         entities=entities,
         history=history,
         forecast=forecast,
-        image=None,
+        image=preview_image,
         now=datetime.now(tz=UTC),
     )
 

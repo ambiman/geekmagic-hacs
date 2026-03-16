@@ -625,7 +625,7 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         from io import BytesIO
         from zoneinfo import ZoneInfo
 
-        from PIL import Image
+        from PIL import Image, ImageOps
 
         states: dict[int, WidgetState] = {}
 
@@ -682,7 +682,7 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 picture_bytes = self._picture_images.get(slot.index)
                 if picture_bytes:
                     with contextlib.suppress(Exception):
-                        image = Image.open(BytesIO(picture_bytes))
+                        image = ImageOps.exif_transpose(Image.open(BytesIO(picture_bytes)))
 
             # Get pre-fetched weather forecast
             forecast: list[dict[str, Any]] = []
