@@ -999,14 +999,21 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
 
             # Pre-fetch async data (camera images, media art, chart history, weather forecasts)
             # (must be done in async context)
-            await self._async_fetch_camera_images()
-            await self._async_fetch_media_images()
-            await self._async_fetch_chart_history()
-            await self._async_fetch_weather_forecasts()
-            try:
-                await self._async_fetch_picture_images()
-            except Exception:
-                _LOGGER.exception("Unexpected error in _async_fetch_picture_images")
+            for _fetch_name, _fetch_coro in [
+                ("camera_images", self._async_fetch_camera_images()),
+                ("media_images", self._async_fetch_media_images()),
+                ("chart_history", self._async_fetch_chart_history()),
+                ("weather_forecasts", self._async_fetch_weather_forecasts()),
+                ("picture_images", self._async_fetch_picture_images()),
+            ]:
+                try:
+                    await _fetch_coro
+                except Exception:
+                    _LOGGER.warning(
+                        "Error in %s pre-fetch (see traceback below):",
+                        _fetch_name,
+                        exc_info=True,
+                    )
 
             # Render image in executor to avoid blocking the event loop
             # (Pillow image operations are CPU-intensive)
