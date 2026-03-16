@@ -1935,17 +1935,13 @@ export class GeekMagicPanel extends LitElement {
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
                     .selector=${{ media: { accept: ["image/*"] } }}
-                    .value=${path ? { url: path, entity: "" } : undefined}
+                    .value=${path || undefined}
                     .label=${"Image " + (idx + 1)}
                     @value-changed=${(e: CustomEvent) => {
                       const newIds = [...ids];
-                      const val = e.detail.value;
-                      // ha-selector[media] returns an object {url, entity}; extract the URL
-                      if (val && typeof val === "object") {
-                        newIds[idx] = (val as { url?: string; entity?: string }).url || "";
-                      } else {
-                        newIds[idx] = (val as string) || "";
-                      }
+                      // Store the raw value from ha-selector (string or object).
+                      // PictureWidget.__init__ normalises both formats on the Python side.
+                      newIds[idx] = e.detail.value ?? "";
                       this._updateWidgetOption(slot, key, newIds);
                     }}
                   ></ha-selector>

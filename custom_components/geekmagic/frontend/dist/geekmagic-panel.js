@@ -194,8 +194,8 @@ let E = class extends HTMLElement {
     if (r !== void 0 && this._$Em !== r) {
       const l = i.getPropertyOptions(r), n = typeof l.converter == "function" ? { fromAttribute: l.converter } : ((a = l.converter) == null ? void 0 : a.fromAttribute) !== void 0 ? l.converter : N;
       this._$Em = r;
-      const c = n.fromAttribute(t, l.type);
-      this[r] = c ?? ((o = this._$Ej) == null ? void 0 : o.get(r)) ?? c, this._$Em = null;
+      const h = n.fromAttribute(t, l.type);
+      this[r] = h ?? ((o = this._$Ej) == null ? void 0 : o.get(r)) ?? h, this._$Em = null;
     }
   }
   requestUpdate(e, t, i) {
@@ -296,10 +296,10 @@ const Ie = (s, e) => {
   let r, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", o = S;
   for (let l = 0; l < t; l++) {
     const n = s[l];
-    let c, u, h = -1, f = 0;
-    for (; f < n.length && (o.lastIndex = f, u = o.exec(n), u !== null); ) f = o.lastIndex, o === S ? u[1] === "!--" ? o = se : u[1] !== void 0 ? o = re : u[2] !== void 0 ? (ue.test(u[2]) && (r = RegExp("</" + u[2], "g")), o = w) : u[3] !== void 0 && (o = w) : o === w ? u[0] === ">" ? (o = r ?? S, h = -1) : u[1] === void 0 ? h = -2 : (h = o.lastIndex - u[2].length, c = u[1], o = u[3] === void 0 ? w : u[3] === '"' ? oe : ae) : o === oe || o === ae ? o = w : o === se || o === re ? o = S : (o = w, r = void 0);
+    let h, u, c = -1, f = 0;
+    for (; f < n.length && (o.lastIndex = f, u = o.exec(n), u !== null); ) f = o.lastIndex, o === S ? u[1] === "!--" ? o = se : u[1] !== void 0 ? o = re : u[2] !== void 0 ? (ue.test(u[2]) && (r = RegExp("</" + u[2], "g")), o = w) : u[3] !== void 0 && (o = w) : o === w ? u[0] === ">" ? (o = r ?? S, c = -1) : u[1] === void 0 ? c = -2 : (c = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? w : u[3] === '"' ? oe : ae) : o === oe || o === ae ? o = w : o === se || o === re ? o = S : (o = w, r = void 0);
     const _ = o === w && s[l + 1].startsWith("/>") ? " " : "";
-    a += o === S ? n + ke : h >= 0 ? (i.push(c), n.slice(0, h) + he + n.slice(h) + y + _) : n + y + (h === -2 ? l : _);
+    a += o === S ? n + ke : c >= 0 ? (i.push(h), n.slice(0, c) + he + n.slice(c) + y + _) : n + y + (c === -2 ? l : _);
   }
   return [ge(s, a + (s[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
@@ -308,29 +308,29 @@ class L {
     let r;
     this.parts = [];
     let a = 0, o = 0;
-    const l = e.length - 1, n = this.parts, [c, u] = Ie(e, t);
-    if (this.el = L.createElement(c, i), b.currentNode = this.el.content, t === 2 || t === 3) {
-      const h = this.el.content.firstChild;
-      h.replaceWith(...h.childNodes);
+    const l = e.length - 1, n = this.parts, [h, u] = Ie(e, t);
+    if (this.el = L.createElement(h, i), b.currentNode = this.el.content, t === 2 || t === 3) {
+      const c = this.el.content.firstChild;
+      c.replaceWith(...c.childNodes);
     }
     for (; (r = b.nextNode()) !== null && n.length < l; ) {
       if (r.nodeType === 1) {
-        if (r.hasAttributes()) for (const h of r.getAttributeNames()) if (h.endsWith(he)) {
-          const f = u[o++], _ = r.getAttribute(h).split(y), U = /([.?@])?(.*)/.exec(f);
-          n.push({ type: 1, index: a, name: U[2], strings: _, ctor: U[1] === "." ? Oe : U[1] === "?" ? Me : U[1] === "@" ? He : R }), r.removeAttribute(h);
-        } else h.startsWith(y) && (n.push({ type: 6, index: a }), r.removeAttribute(h));
+        if (r.hasAttributes()) for (const c of r.getAttributeNames()) if (c.endsWith(he)) {
+          const f = u[o++], _ = r.getAttribute(c).split(y), U = /([.?@])?(.*)/.exec(f);
+          n.push({ type: 1, index: a, name: U[2], strings: _, ctor: U[1] === "." ? Oe : U[1] === "?" ? Me : U[1] === "@" ? He : R }), r.removeAttribute(c);
+        } else c.startsWith(y) && (n.push({ type: 6, index: a }), r.removeAttribute(c));
         if (ue.test(r.tagName)) {
-          const h = r.textContent.split(y), f = h.length - 1;
+          const c = r.textContent.split(y), f = c.length - 1;
           if (f > 0) {
             r.textContent = z ? z.emptyScript : "";
-            for (let _ = 0; _ < f; _++) r.append(h[_], M()), b.nextNode(), n.push({ type: 2, index: ++a });
-            r.append(h[f], M());
+            for (let _ = 0; _ < f; _++) r.append(c[_], M()), b.nextNode(), n.push({ type: 2, index: ++a });
+            r.append(c[f], M());
           }
         }
       } else if (r.nodeType === 8) if (r.data === pe) n.push({ type: 2, index: a });
       else {
-        let h = -1;
-        for (; (h = r.data.indexOf(y, h + 1)) !== -1; ) n.push({ type: 7, index: a }), h += y.length - 1;
+        let c = -1;
+        for (; (c = r.data.indexOf(y, c + 1)) !== -1; ) n.push({ type: 7, index: a }), c += y.length - 1;
       }
       a++;
     }
@@ -363,8 +363,8 @@ class Ve {
     let a = b.nextNode(), o = 0, l = 0, n = i[0];
     for (; n !== void 0; ) {
       if (o === n.index) {
-        let c;
-        n.type === 2 ? c = new C(a, a.nextSibling, this, e) : n.type === 1 ? c = new n.ctor(a, n.name, n.strings, this, e) : n.type === 6 && (c = new Le(a, this, e)), this._$AV.push(c), n = i[++l];
+        let h;
+        n.type === 2 ? h = new C(a, a.nextSibling, this, e) : n.type === 1 ? h = new n.ctor(a, n.name, n.strings, this, e) : n.type === 6 && (h = new Le(a, this, e)), this._$AV.push(h), n = i[++l];
       }
       o !== (n == null ? void 0 : n.index) && (a = b.nextNode(), o++);
     }
@@ -454,8 +454,8 @@ class R {
     if (a === void 0) e = P(this, e, t, 0), o = !H(e) || e !== this._$AH && e !== k, o && (this._$AH = e);
     else {
       const l = e;
-      let n, c;
-      for (e = a[0], n = 0; n < a.length - 1; n++) c = P(this, l[i + n], t, n), c === k && (c = this._$AH[n]), o || (o = !H(c) || c !== this._$AH[n]), c === p ? e = p : e !== p && (e += (c ?? "") + a[n + 1]), this._$AH[n] = c;
+      let n, h;
+      for (e = a[0], n = 0; n < a.length - 1; n++) h = P(this, l[i + n], t, n), h === k && (h = this._$AH[n]), o || (o = !H(h) || h !== this._$AH[n]), h === p ? e = p : e !== p && (e += (h ?? "") + a[n + 1]), this._$AH[n] = h;
     }
     o && !r && this.j(e);
   }
@@ -1068,8 +1068,8 @@ let g = class extends O {
       )
     )}
               @selected=${(l) => {
-      const n = ["", ...Object.keys(this._config.widget_types)], c = q(l.detail, n) ?? "";
-      this._updateWidget(s, { type: c });
+      const n = ["", ...Object.keys(this._config.widget_types)], h = q(l.detail, n) ?? "";
+      this._updateWidget(s, { type: h });
     }}
               @closed=${(l) => l.stopPropagation()}
             >
@@ -1411,8 +1411,8 @@ let g = class extends O {
                         .path=${"M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"}
                         @click=${(n) => {
         n.stopPropagation();
-        const c = i.filter((u, h) => h !== a);
-        this._updateWidgetOption(s, e, c);
+        const h = i.filter((u, c) => c !== a);
+        this._updateWidgetOption(s, e, h);
       }}
                       ></ha-icon-button>
                     </div>
@@ -1515,8 +1515,8 @@ let g = class extends O {
                         .path=${"M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"}
                         @click=${(n) => {
         n.stopPropagation();
-        const c = i.filter((u, h) => h !== a);
-        this._updateWidgetOption(s, e, c);
+        const h = i.filter((u, c) => c !== a);
+        this._updateWidgetOption(s, e, h);
       }}
                       ></ha-icon-button>
                     </div>
@@ -1640,11 +1640,11 @@ let g = class extends O {
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
                     .selector=${{ media: { accept: ["image/*"] } }}
-                    .value=${a ? { url: a, entity: "" } : void 0}
+                    .value=${a || void 0}
                     .label=${"Image " + (o + 1)}
                     @value-changed=${(l) => {
-        const n = [...i], c = l.detail.value;
-        c && typeof c == "object" ? n[o] = c.url || "" : n[o] = c || "", this._updateWidgetOption(s, e, n);
+        const n = [...i];
+        n[o] = l.detail.value ?? "", this._updateWidgetOption(s, e, n);
       }}
                   ></ha-selector>
                   <ha-icon-button
