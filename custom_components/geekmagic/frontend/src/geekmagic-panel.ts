@@ -1934,12 +1934,18 @@ export class GeekMagicPanel extends LitElement {
                   <ha-selector
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
-                    .selector=${{ media: { accept: ["image/*"], clearable: true } }}
-                    .value=${path || ""}
+                    .selector=${{ media: { accept: ["image/*"] } }}
+                    .value=${path ? { url: path, entity: "" } : undefined}
                     .label=${"Image " + (idx + 1)}
                     @value-changed=${(e: CustomEvent) => {
                       const newIds = [...ids];
-                      newIds[idx] = e.detail.value || "";
+                      const val = e.detail.value;
+                      // ha-selector[media] returns an object {url, entity}; extract the URL
+                      if (val && typeof val === "object") {
+                        newIds[idx] = (val as { url?: string; entity?: string }).url || "";
+                      } else {
+                        newIds[idx] = (val as string) || "";
+                      }
                       this._updateWidgetOption(slot, key, newIds);
                     }}
                   ></ha-selector>

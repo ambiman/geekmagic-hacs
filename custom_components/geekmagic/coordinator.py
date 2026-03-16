@@ -1379,8 +1379,11 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
             else:
                 self._picture_images.pop(slot.index, None)
 
-    async def _async_fetch_picture_source(self, source: str) -> bytes | None:
-        """Fetch image bytes from an entity ID or media-source:// URI."""
+    async def _async_fetch_picture_source(self, source: str) -> bytes | None:  # noqa: PLR0911
+        """Fetch image bytes from an entity ID, media-source:// URI, or plain URL."""
+        if not isinstance(source, str) or not source:
+            _LOGGER.warning("Invalid picture source (expected string, got %r)", type(source))
+            return None
         if source.startswith("image."):
             try:
                 from homeassistant.components.image import async_get_image
@@ -1401,6 +1404,16 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Failed to fetch camera entity %s: %s", source, e)
         elif source.startswith("media-source://"):
             return await self._async_fetch_media_source_image(source)
+        elif source.startswith(("http://", "https://")):
+            # Plain URL (e.g. from ha-selector media returning an external URL)
+            try:
+                session = async_get_clientsession(self.hass)
+                async with session.get(source, timeout=10) as response:
+                    if response.status == 200:
+                        return await response.read()
+                    _LOGGER.warning("HTTP %d fetching image URL %s", response.status, source)
+            except Exception as e:
+                _LOGGER.debug("Failed to fetch image URL %s: %s", source, e)
         else:
             # Generic entity: fetch via entity_picture attribute URL
             state = self.hass.states.get(source)
