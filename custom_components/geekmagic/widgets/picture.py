@@ -27,11 +27,20 @@ class PictureWidget(Widget):
 
     def __init__(self, config: WidgetConfig) -> None:
         super().__init__(config)
-        raw: list[str] = config.options.get("entity_ids", [])
-        self.entity_ids: list[str] = [e for e in raw if e]
+        raw: list = config.options.get("entity_ids", [])
+        self.entity_ids: list[str] = [e for e in raw if isinstance(e, str) and e]
 
-        raw_paths: list[str] = config.options.get("image_paths", [])
-        self.image_paths: list[str] = [p for p in raw_paths if p]
+        raw_paths: list = config.options.get("image_paths", [])
+        self.image_paths: list[str] = []
+        for p in raw_paths:
+            if isinstance(p, str) and p:
+                self.image_paths.append(p)
+            elif isinstance(p, dict):
+                # Older configs may have stored the ha-selector[media] return value
+                # ({url, entity}) directly instead of extracting the URL string.
+                url = str(p.get("url") or p.get("media_content_id") or "")
+                if url:
+                    self.image_paths.append(url)
 
         self.fit: str = config.options.get("fit", "contain")
         self.show_label: bool = config.options.get("show_label", False)
