@@ -1003,7 +1003,10 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
             await self._async_fetch_media_images()
             await self._async_fetch_chart_history()
             await self._async_fetch_weather_forecasts()
-            await self._async_fetch_picture_images()
+            try:
+                await self._async_fetch_picture_images()
+            except Exception:
+                _LOGGER.exception("Unexpected error in _async_fetch_picture_images")
 
             # Render image in executor to avoid blocking the event loop
             # (Pillow image operations are CPU-intensive)
@@ -1050,6 +1053,9 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
             self._consecutive_failures += 1
             self._device_offline = True
             self._apply_backoff()
+            _LOGGER.exception(
+                "GeekMagic device %s update error (traceback below):", self.device.host
+            )
             self._log_connection_error(err)
             raise UpdateFailed(f"Error updating display: {err}") from err
 
