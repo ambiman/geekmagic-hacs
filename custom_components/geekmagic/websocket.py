@@ -779,8 +779,43 @@ async def ws_preview_render(
                 except Exception as err:
                     _LOGGER.debug("Failed to fetch forecast for %s: %s", entity_id, err)
 
+    # Pre-fetch images for picture/camera widgets so the preview shows them
+    # keyed by slot index → PIL Image
+    picture_images: dict[int, Any] = {}
+    for widget_data in view_config.get("widgets", []):
+        if widget_data.get("type") != "picture":
+            continue
+        slot = widget_data.get("slot", 0)
+        entity_ids: list[str] = widget_data.get("options", {}).get("entity_ids", [])
+        entity_ids = [e for e in entity_ids if e]
+        if not entity_ids:
+            continue
+        # Use the first entity for the preview
+        entity_id = entity_ids[0]
+        try:
+            if entity_id.startswith("image."):
+                from homeassistant.components.image import async_get_image as img_get
+
+                img_result = await img_get(hass, entity_id)
+                if img_result and img_result.content:
+                    picture_images[slot] = img_result.content
+            elif entity_id.startswith("camera."):
+                from homeassistant.components.camera import (
+                    async_get_image as cam_get,
+                )
+
+                img_result = await cam_get(hass, entity_id)
+                if img_result and img_result.content:
+                    picture_images[slot] = img_result.content
+        except Exception as err:
+            _LOGGER.debug("Failed to pre-fetch picture preview image for %s: %s", entity_id, err)
+
     def _render() -> bytes:
         """Render the view (runs in executor)."""
+        from io import BytesIO
+
+        from PIL import Image, ImageOps
+
         renderer = Renderer()
 
         # Create layout
@@ -867,12 +902,20 @@ async def ws_preview_render(
                     with contextlib.suppress(Exception):
                         widget_now = datetime.now(tz=ZoneInfo(tz_option))
 
+            # Provide pre-fetched image for picture widgets
+            preview_image: Any = None
+            if widget_type == "picture" and slot in picture_images:
+                with contextlib.suppress(Exception):
+                    preview_image = ImageOps.exif_transpose(
+                        Image.open(BytesIO(picture_images[slot]))
+                    )
+
             widget_states[slot] = WidgetState(
                 entity=entity,
                 entities={},
                 history=history,
                 forecast=forecast,
-                image=None,
+                image=preview_image,
                 now=widget_now,
             )
 
