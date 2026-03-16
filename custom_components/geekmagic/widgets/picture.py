@@ -15,23 +15,33 @@ if TYPE_CHECKING:
 
 
 class PictureWidget(Widget):
-    """Widget that displays HA image entities with optional cycling.
+    """Widget that displays images with optional cycling.
 
-    Supports 1-32 image entities. When multiple entities are configured the
-    coordinator advances through them on each update cycle so each image is
-    shown in turn.
+    Supports up to 32 sources per mode:
+    - ``entity_ids``: HA image.* / camera.* entity IDs
+    - ``media_source_items``: individual media-source:// URIs
+    - ``media_source_folder``: a single media-source:// folder URI whose
+      contents are auto-discovered and cycled through
+
+    The coordinator combines all configured sources and advances through them
+    on each update cycle so each image is shown in turn.
     """
 
     def __init__(self, config: WidgetConfig) -> None:
         super().__init__(config)
         raw: list[str] = config.options.get("entity_ids", [])
-        # Filter out blank entries that the UI may produce while editing
         self.entity_ids: list[str] = [e for e in raw if e]
+
+        raw_ms: list[str] = config.options.get("media_source_items", [])
+        self.media_source_items: list[str] = [m for m in raw_ms if m]
+
+        self.media_source_folder: str | None = config.options.get("media_source_folder") or None
+
         self.fit: str = config.options.get("fit", "contain")
         self.show_label: bool = config.options.get("show_label", False)
 
     def get_entities(self) -> list[str]:
-        """Return all configured entity IDs so HA state tracking works."""
+        """Return HA entity IDs so HA state tracking works."""
         return list(self.entity_ids)
 
     def render(self, ctx: RenderContext, state: WidgetState) -> Component:

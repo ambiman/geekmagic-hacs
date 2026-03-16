@@ -1467,6 +1467,12 @@ export class GeekMagicPanel extends LitElement {
       case "image_entity_list":
         return this._renderImageEntityListEditor(slot, opt.key, value as string[] | undefined);
 
+      case "media_source_list":
+        return this._renderMediaSourceListEditor(slot, opt.key, value as string[] | undefined);
+
+      case "media_source_folder":
+        return this._renderMediaSourceFolderEditor(slot, opt.key, value as string | undefined);
+
       case "timezone":
         return html`
           <div class="option-field">
@@ -1903,6 +1909,107 @@ export class GeekMagicPanel extends LitElement {
               `
             : nothing}
         </div>
+      </div>
+    `;
+  }
+
+  private _renderMediaSourceListEditor(
+    slot: number,
+    key: string,
+    items: string[] | undefined
+  ) {
+    const ids = items || [];
+    const MAX_ITEMS = 32;
+
+    return html`
+      <div class="option-field">
+        <div class="array-editor">
+          <div class="array-editor-header">
+            <span>Media Files (${ids.length} / ${MAX_ITEMS})</span>
+          </div>
+          <div class="array-items">
+            ${ids.map(
+              (uri, idx) => html`
+                <div
+                  class="array-item"
+                  style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;"
+                >
+                  <ha-selector
+                    style="flex: 1; min-width: 0;"
+                    .hass=${this.hass}
+                    .selector=${{ media: {} }}
+                    .value=${uri ? { media_content_id: uri, media_content_type: "image/jpeg" } : undefined}
+                    .label=${"File " + (idx + 1)}
+                    @value-changed=${(e: CustomEvent) => {
+                      const newIds = [...ids];
+                      newIds[idx] = e.detail.value?.media_content_id || "";
+                      this._updateWidgetOption(slot, key, newIds);
+                    }}
+                  ></ha-selector>
+                  <ha-icon-button
+                    style="flex-shrink: 0;"
+                    .path=${"M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"}
+                    @click=${() => {
+                      this._updateWidgetOption(slot, key, ids.filter((_, i) => i !== idx));
+                    }}
+                  ></ha-icon-button>
+                </div>
+              `
+            )}
+          </div>
+          ${ids.length < MAX_ITEMS
+            ? html`
+                <div
+                  class="add-item-button"
+                  @click=${() => {
+                    this._updateWidgetOption(slot, key, [...ids, ""]);
+                  }}
+                >
+                  <ha-icon icon="mdi:plus"></ha-icon>
+                  Add Media File
+                </div>
+              `
+            : nothing}
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderMediaSourceFolderEditor(
+    slot: number,
+    key: string,
+    folderUri: string | undefined
+  ) {
+    return html`
+      <div class="option-field">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <ha-selector
+            style="flex: 1; min-width: 0;"
+            .hass=${this.hass}
+            .selector=${{ media: {} }}
+            .value=${folderUri
+              ? { media_content_id: folderUri, media_content_type: "app" }
+              : undefined}
+            .label=${"Media Ordner"}
+            @value-changed=${(e: CustomEvent) => {
+              this._updateWidgetOption(slot, key, e.detail.value?.media_content_id || null);
+            }}
+          ></ha-selector>
+          ${folderUri
+            ? html`
+                <ha-icon-button
+                  style="flex-shrink: 0;"
+                  .path=${"M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"}
+                  @click=${() => {
+                    this._updateWidgetOption(slot, key, null);
+                  }}
+                ></ha-icon-button>
+              `
+            : nothing}
+        </div>
+        ${folderUri
+          ? html`<div style="font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; word-break: break-all;">${folderUri}</div>`
+          : nothing}
       </div>
     `;
   }

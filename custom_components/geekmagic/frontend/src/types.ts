@@ -106,7 +106,9 @@ export interface WidgetOption {
     | "thresholds"
     | "progress_items"
     | "status_entities"
-    | "image_entity_list";
+    | "image_entity_list"
+    | "media_source_list"
+    | "media_source_folder";
   label: string;
   default?: unknown;
   options?: string[];

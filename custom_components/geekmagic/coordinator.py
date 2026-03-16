@@ -225,6 +225,8 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         self._weather_forecasts: dict[str, list[dict[str, Any]]] = {}  # Pre-fetched forecasts
         self._picture_images: dict[int, bytes] = {}  # Pre-fetched picture images keyed by slot
         self._picture_cycle_indices: dict[int, int] = {}  # Cycle index per slot
+        self._media_source_folder_contents: dict[int, list[str]] = {}  # Cached folder URIs per slot
+        self._media_source_folder_counters: dict[int, int] = {}  # Refresh counter per slot
         self._update_preview: bool = True  # Update preview on next refresh
         self._preview_just_updated: bool = False  # True if preview was updated in last refresh
 
@@ -1333,8 +1335,8 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
     async def _async_fetch_picture_images(self) -> None:
         """Pre-fetch images for picture widgets, advancing the per-slot cycle index.
 
-        On each update cycle the active entity advances so that each configured
-        image is shown in turn.
+        Combines entity_ids, media_source_items, and media_source_folder contents
+        into a single source list and cycles through them on each update.
         """
         if not self._layouts or not (0 <= self._current_screen < len(self._layouts)):
             return
@@ -1345,72 +1347,127 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 continue
 
             widget: PictureWidget = slot.widget
-            entity_ids = widget.entity_ids
-            if not entity_ids:
+
+            # Build combined source list
+            sources: list[str] = list(widget.entity_ids)
+            sources.extend(widget.media_source_items)
+            if widget.media_source_folder:
+                folder_items = await self._async_get_media_source_folder_contents(
+                    slot.index, widget.media_source_folder
+                )
+                sources.extend(folder_items)
+
+            if not sources:
                 self._picture_images.pop(slot.index, None)
                 continue
 
-            # Determine which entity to show this cycle
-            current_idx = self._picture_cycle_indices.get(slot.index, 0) % len(entity_ids)
-            entity_id = entity_ids[current_idx]
+            # Determine which source to show this cycle and advance index
+            current_idx = self._picture_cycle_indices.get(slot.index, 0) % len(sources)
+            source = sources[current_idx]
+            self._picture_cycle_indices[slot.index] = (current_idx + 1) % len(sources)
 
-            # Advance index for the next cycle
-            self._picture_cycle_indices[slot.index] = (current_idx + 1) % len(entity_ids)
-
-            # Fetch image bytes: use HA image/camera platform APIs for known entity
-            # domains, fall back to entity_picture URL for anything else
-            image_bytes: bytes | None = None
-            if entity_id.startswith("image."):
-                try:
-                    from homeassistant.components.image import async_get_image
-
-                    img = await async_get_image(self.hass, entity_id)
-                    if img and img.content:
-                        image_bytes = img.content
-                except Exception as e:
-                    _LOGGER.debug("Failed to fetch picture image for %s: %s", entity_id, e)
-            elif entity_id.startswith("camera."):
-                try:
-                    from homeassistant.components.camera import async_get_image as camera_get_image
-
-                    img = await camera_get_image(self.hass, entity_id)
-                    if img and img.content:
-                        image_bytes = img.content
-                except Exception as e:
-                    _LOGGER.debug("Failed to fetch picture camera image for %s: %s", entity_id, e)
-            else:
-                # Generic entity: fetch via entity_picture attribute URL
-                state = self.hass.states.get(entity_id)
-                if state:
-                    image_url = state.attributes.get("entity_picture")
-                    if image_url and image_url.startswith("/"):
-                        base_url = self.hass.config.internal_url or getattr(
-                            self.hass.config, "external_url", None
-                        )
-                        if base_url:
-                            full_url = f"{base_url.rstrip('/')}/{image_url.lstrip('/')}"
-                            try:
-                                session = async_get_clientsession(self.hass)
-                                async with session.get(full_url, timeout=10) as response:
-                                    if response.status == 200:
-                                        image_bytes = await response.read()
-                            except Exception as e:
-                                _LOGGER.debug(
-                                    "Failed to fetch picture entity_picture for %s: %s",
-                                    entity_id,
-                                    e,
-                                )
+            image_bytes = await self._async_fetch_picture_source(source)
 
             if image_bytes:
                 self._picture_images[slot.index] = image_bytes
                 _LOGGER.debug(
                     "Fetched picture image for slot %d (%s): %d bytes",
                     slot.index,
-                    entity_id,
+                    source,
                     len(image_bytes),
                 )
             else:
                 self._picture_images.pop(slot.index, None)
+
+    async def _async_get_media_source_folder_contents(
+        self, slot_index: int, folder_uri: str
+    ) -> list[str]:
+        """Browse a media source folder and return image URIs (cached, refreshed every 10 cycles).
+
+        Folder contents are re-fetched every 10 update cycles so new images appear automatically.
+        """
+        counter = self._media_source_folder_counters.get(slot_index, 0)
+        if counter == 0 or slot_index not in self._media_source_folder_contents:
+            try:
+                from homeassistant.components.media_source import async_browse_media
+
+                result = await async_browse_media(self.hass, folder_uri)
+                # Collect playable items (skip sub-folders)
+                items: list[str] = [
+                    child.media_content_id
+                    for child in (result.children or [])
+                    if not child.can_expand and child.media_content_id
+                ]
+                self._media_source_folder_contents[slot_index] = items
+                _LOGGER.debug("Browsed media source folder %s: %d items", folder_uri, len(items))
+            except Exception as e:
+                _LOGGER.debug("Failed to browse media source folder %s: %s", folder_uri, e)
+        self._media_source_folder_counters[slot_index] = (counter + 1) % 10
+        return self._media_source_folder_contents.get(slot_index, [])
+
+    async def _async_fetch_picture_source(self, source: str) -> bytes | None:
+        """Fetch image bytes from an entity ID or media-source:// URI."""
+        if source.startswith("image."):
+            try:
+                from homeassistant.components.image import async_get_image
+
+                img = await async_get_image(self.hass, source)
+                if img and img.content:
+                    return img.content
+            except Exception as e:
+                _LOGGER.debug("Failed to fetch image entity %s: %s", source, e)
+        elif source.startswith("camera."):
+            try:
+                from homeassistant.components.camera import async_get_image as camera_get_image
+
+                img = await camera_get_image(self.hass, source)
+                if img and img.content:
+                    return img.content
+            except Exception as e:
+                _LOGGER.debug("Failed to fetch camera entity %s: %s", source, e)
+        elif source.startswith("media-source://"):
+            return await self._async_fetch_media_source_image(source)
+        else:
+            # Generic entity: fetch via entity_picture attribute URL
+            state = self.hass.states.get(source)
+            if state:
+                image_url = state.attributes.get("entity_picture")
+                if image_url and image_url.startswith("/"):
+                    base_url = self.hass.config.internal_url or getattr(
+                        self.hass.config, "external_url", None
+                    )
+                    if base_url:
+                        full_url = f"{base_url.rstrip('/')}/{image_url.lstrip('/')}"
+                        try:
+                            session = async_get_clientsession(self.hass)
+                            async with session.get(full_url, timeout=10) as response:
+                                if response.status == 200:
+                                    return await response.read()
+                        except Exception as e:
+                            _LOGGER.debug("Failed to fetch entity_picture for %s: %s", source, e)
+        return None
+
+    async def _async_fetch_media_source_image(self, media_content_id: str) -> bytes | None:
+        """Resolve a media-source:// URI and fetch the image bytes."""
+        try:
+            from homeassistant.components.media_source import async_resolve_media
+
+            result = await async_resolve_media(self.hass, media_content_id, None)
+            url: str = result.url
+            if url.startswith("/"):
+                base_url = self.hass.config.internal_url or getattr(
+                    self.hass.config, "external_url", None
+                )
+                if not base_url:
+                    return None
+                url = f"{base_url.rstrip('/')}{url}"
+            session = async_get_clientsession(self.hass)
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    return await response.read()
+        except Exception as e:
+            _LOGGER.debug("Failed to fetch media source image %s: %s", media_content_id, e)
+        return None
 
     async def _async_fetch_url_image_to_cache(self, source: str) -> None:
         """Fetch image from entity_picture and save to camera image cache.

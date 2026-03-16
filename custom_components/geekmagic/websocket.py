@@ -250,6 +250,16 @@ WIDGET_TYPE_SCHEMAS: dict[str, dict[str, Any]] = {
         "options": [
             {"key": "entity_ids", "type": "image_entity_list", "label": "Image Entities"},
             {
+                "key": "media_source_items",
+                "type": "media_source_list",
+                "label": "Media Files (einzeln)",
+            },
+            {
+                "key": "media_source_folder",
+                "type": "media_source_folder",
+                "label": "Media Ordner (alle Dateien)",
+            },
+            {
                 "key": "fit",
                 "type": "select",
                 "label": "Fit Mode",
@@ -779,36 +789,78 @@ async def ws_preview_render(
                 except Exception as err:
                     _LOGGER.debug("Failed to fetch forecast for %s: %s", entity_id, err)
 
-    # Pre-fetch images for picture/camera widgets so the preview shows them
-    # keyed by slot index → PIL Image
+    # Pre-fetch images for picture widgets so the preview shows them.
+    # Uses the first configured source (entity or media source) per slot.
     picture_images: dict[int, Any] = {}
+
+    async def _fetch_preview_source(source: str) -> bytes | None:
+        """Fetch bytes from an entity ID or media-source:// URI for preview."""
+        try:
+            if source.startswith("image."):
+                from homeassistant.components.image import async_get_image as img_get
+
+                r = await img_get(hass, source)
+                return r.content if r and r.content else None
+            if source.startswith("camera."):
+                from homeassistant.components.camera import async_get_image as cam_get
+
+                r = await cam_get(hass, source)
+                return r.content if r and r.content else None
+            if source.startswith("media-source://"):
+                from homeassistant.components.media_source import async_resolve_media
+
+                resolved = await async_resolve_media(hass, source, None)
+                url: str = resolved.url
+                if url.startswith("/"):
+                    base_url = hass.config.internal_url or getattr(
+                        hass.config, "external_url", None
+                    )
+                    if not base_url:
+                        return None
+                    url = f"{base_url.rstrip('/')}{url}"
+                from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+                session = async_get_clientsession(hass)
+                async with session.get(url, timeout=10) as resp:
+                    return await resp.read() if resp.status == 200 else None
+        except Exception as err:
+            _LOGGER.debug("Failed to pre-fetch preview source %s: %s", source, err)
+        return None
+
     for widget_data in view_config.get("widgets", []):
         if widget_data.get("type") != "picture":
             continue
         slot = widget_data.get("slot", 0)
-        entity_ids: list[str] = widget_data.get("options", {}).get("entity_ids", [])
-        entity_ids = [e for e in entity_ids if e]
-        if not entity_ids:
+        opts = widget_data.get("options", {})
+
+        # Build candidate sources: entity_ids first, then media_source_items, then folder
+        sources: list[str] = [e for e in opts.get("entity_ids", []) if e]
+        sources += [m for m in opts.get("media_source_items", []) if m]
+
+        # If a folder is configured and no other sources found, browse it for the first item
+        if not sources:
+            folder_uri: str = opts.get("media_source_folder", "") or ""
+            if folder_uri:
+                try:
+                    from homeassistant.components.media_source import async_browse_media
+
+                    browse = await async_browse_media(hass, folder_uri)
+                    if browse.children:
+                        first = next(
+                            (c for c in browse.children if not c.can_expand and c.media_content_id),
+                            None,
+                        )
+                        if first:
+                            sources.append(first.media_content_id)
+                except Exception as err:
+                    _LOGGER.debug("Failed to browse folder for preview %s: %s", folder_uri, err)
+
+        if not sources:
             continue
-        # Use the first entity for the preview
-        entity_id = entity_ids[0]
-        try:
-            if entity_id.startswith("image."):
-                from homeassistant.components.image import async_get_image as img_get
 
-                img_result = await img_get(hass, entity_id)
-                if img_result and img_result.content:
-                    picture_images[slot] = img_result.content
-            elif entity_id.startswith("camera."):
-                from homeassistant.components.camera import (
-                    async_get_image as cam_get,
-                )
-
-                img_result = await cam_get(hass, entity_id)
-                if img_result and img_result.content:
-                    picture_images[slot] = img_result.content
-        except Exception as err:
-            _LOGGER.debug("Failed to pre-fetch picture preview image for %s: %s", entity_id, err)
+        image_bytes = await _fetch_preview_source(sources[0])
+        if image_bytes:
+            picture_images[slot] = image_bytes
 
     def _render() -> bytes:
         """Render the view (runs in executor)."""
