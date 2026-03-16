@@ -107,8 +107,7 @@ export interface WidgetOption {
     | "progress_items"
     | "status_entities"
     | "image_entity_list"
-    | "media_source_list"
-    | "media_source_folder";
+    | "image_path_list";
   label: string;
   default?: unknown;
   options?: string[];

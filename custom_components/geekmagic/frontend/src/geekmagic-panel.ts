@@ -1467,11 +1467,8 @@ export class GeekMagicPanel extends LitElement {
       case "image_entity_list":
         return this._renderImageEntityListEditor(slot, opt.key, value as string[] | undefined);
 
-      case "media_source_list":
-        return this._renderMediaSourceListEditor(slot, opt.key, value as string[] | undefined);
-
-      case "media_source_folder":
-        return this._renderMediaSourceFolderEditor(slot, opt.key, value as string | undefined);
+      case "image_path_list":
+        return this._renderImagePathListEditor(slot, opt.key, value as string[] | undefined);
 
       case "timezone":
         return html`
@@ -1913,23 +1910,23 @@ export class GeekMagicPanel extends LitElement {
     `;
   }
 
-  private _renderMediaSourceListEditor(
+  private _renderImagePathListEditor(
     slot: number,
     key: string,
-    items: string[] | undefined
+    paths: string[] | undefined
   ) {
-    const ids = items || [];
+    const ids = paths || [];
     const MAX_ITEMS = 32;
 
     return html`
       <div class="option-field">
         <div class="array-editor">
           <div class="array-editor-header">
-            <span>Media Files (${ids.length} / ${MAX_ITEMS})</span>
+            <span>Image Paths (${ids.length} / ${MAX_ITEMS})</span>
           </div>
           <div class="array-items">
             ${ids.map(
-              (uri, idx) => html`
+              (path, idx) => html`
                 <div
                   class="array-item"
                   style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;"
@@ -1937,12 +1934,12 @@ export class GeekMagicPanel extends LitElement {
                   <ha-selector
                     style="flex: 1; min-width: 0;"
                     .hass=${this.hass}
-                    .selector=${{ media: {} }}
-                    .value=${uri ? { media_content_id: uri, media_content_type: "image/jpeg" } : undefined}
-                    .label=${"File " + (idx + 1)}
+                    .selector=${{ image: {} }}
+                    .value=${path || ""}
+                    .label=${"Image " + (idx + 1)}
                     @value-changed=${(e: CustomEvent) => {
                       const newIds = [...ids];
-                      newIds[idx] = e.detail.value?.media_content_id || "";
+                      newIds[idx] = e.detail.value || "";
                       this._updateWidgetOption(slot, key, newIds);
                     }}
                   ></ha-selector>
@@ -1966,50 +1963,11 @@ export class GeekMagicPanel extends LitElement {
                   }}
                 >
                   <ha-icon icon="mdi:plus"></ha-icon>
-                  Add Media File
+                  Add Image Path
                 </div>
               `
             : nothing}
         </div>
-      </div>
-    `;
-  }
-
-  private _renderMediaSourceFolderEditor(
-    slot: number,
-    key: string,
-    folderUri: string | undefined
-  ) {
-    return html`
-      <div class="option-field">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <ha-selector
-            style="flex: 1; min-width: 0;"
-            .hass=${this.hass}
-            .selector=${{ media: {} }}
-            .value=${folderUri
-              ? { media_content_id: folderUri, media_content_type: "app" }
-              : undefined}
-            .label=${"Media Ordner"}
-            @value-changed=${(e: CustomEvent) => {
-              this._updateWidgetOption(slot, key, e.detail.value?.media_content_id || null);
-            }}
-          ></ha-selector>
-          ${folderUri
-            ? html`
-                <ha-icon-button
-                  style="flex-shrink: 0;"
-                  .path=${"M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"}
-                  @click=${() => {
-                    this._updateWidgetOption(slot, key, null);
-                  }}
-                ></ha-icon-button>
-              `
-            : nothing}
-        </div>
-        ${folderUri
-          ? html`<div style="font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; word-break: break-all;">${folderUri}</div>`
-          : nothing}
       </div>
     `;
   }

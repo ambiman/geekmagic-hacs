@@ -17,14 +17,12 @@ if TYPE_CHECKING:
 class PictureWidget(Widget):
     """Widget that displays images with optional cycling.
 
-    Supports up to 32 sources per mode:
+    Supports up to 32 sources which are cycled on each update:
     - ``entity_ids``: HA image.* / camera.* entity IDs
-    - ``media_source_items``: individual media-source:// URIs
-    - ``media_source_folder``: a single media-source:// folder URI whose
-      contents are auto-discovered and cycled through
+    - ``image_paths``: image URLs or media-source:// paths (as used in the
+      HA Picture Card image path selector)
 
-    The coordinator combines all configured sources and advances through them
-    on each update cycle so each image is shown in turn.
+    All configured sources are combined and cycled through in order.
     """
 
     def __init__(self, config: WidgetConfig) -> None:
@@ -32,10 +30,8 @@ class PictureWidget(Widget):
         raw: list[str] = config.options.get("entity_ids", [])
         self.entity_ids: list[str] = [e for e in raw if e]
 
-        raw_ms: list[str] = config.options.get("media_source_items", [])
-        self.media_source_items: list[str] = [m for m in raw_ms if m]
-
-        self.media_source_folder: str | None = config.options.get("media_source_folder") or None
+        raw_paths: list[str] = config.options.get("image_paths", [])
+        self.image_paths: list[str] = [p for p in raw_paths if p]
 
         self.fit: str = config.options.get("fit", "contain")
         self.show_label: bool = config.options.get("show_label", False)

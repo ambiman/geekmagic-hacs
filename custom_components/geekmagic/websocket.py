@@ -250,14 +250,9 @@ WIDGET_TYPE_SCHEMAS: dict[str, dict[str, Any]] = {
         "options": [
             {"key": "entity_ids", "type": "image_entity_list", "label": "Image Entities"},
             {
-                "key": "media_source_items",
-                "type": "media_source_list",
-                "label": "Media Files (einzeln)",
-            },
-            {
-                "key": "media_source_folder",
-                "type": "media_source_folder",
-                "label": "Media Ordner (alle Dateien)",
+                "key": "image_paths",
+                "type": "image_path_list",
+                "label": "Image Paths / Media Source",
             },
             {
                 "key": "fit",
@@ -833,27 +828,9 @@ async def ws_preview_render(
         slot = widget_data.get("slot", 0)
         opts = widget_data.get("options", {})
 
-        # Build candidate sources: entity_ids first, then media_source_items, then folder
+        # Build candidate sources: entity_ids first, then image_paths
         sources: list[str] = [e for e in opts.get("entity_ids", []) if e]
-        sources += [m for m in opts.get("media_source_items", []) if m]
-
-        # If a folder is configured and no other sources found, browse it for the first item
-        if not sources:
-            folder_uri: str = opts.get("media_source_folder", "") or ""
-            if folder_uri:
-                try:
-                    from homeassistant.components.media_source import async_browse_media
-
-                    browse = await async_browse_media(hass, folder_uri)
-                    if browse.children:
-                        first = next(
-                            (c for c in browse.children if not c.can_expand and c.media_content_id),
-                            None,
-                        )
-                        if first:
-                            sources.append(first.media_content_id)
-                except Exception as err:
-                    _LOGGER.debug("Failed to browse folder for preview %s: %s", folder_uri, err)
+        sources += [p for p in opts.get("image_paths", []) if p]
 
         if not sources:
             continue

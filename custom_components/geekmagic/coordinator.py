@@ -225,8 +225,6 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         self._weather_forecasts: dict[str, list[dict[str, Any]]] = {}  # Pre-fetched forecasts
         self._picture_images: dict[int, bytes] = {}  # Pre-fetched picture images keyed by slot
         self._picture_cycle_indices: dict[int, int] = {}  # Cycle index per slot
-        self._media_source_folder_contents: dict[int, list[str]] = {}  # Cached folder URIs per slot
-        self._media_source_folder_counters: dict[int, int] = {}  # Refresh counter per slot
         self._update_preview: bool = True  # Update preview on next refresh
         self._preview_just_updated: bool = False  # True if preview was updated in last refresh
 
@@ -1348,14 +1346,9 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
 
             widget: PictureWidget = slot.widget
 
-            # Build combined source list
+            # Build combined source list: entity IDs + image paths
             sources: list[str] = list(widget.entity_ids)
-            sources.extend(widget.media_source_items)
-            if widget.media_source_folder:
-                folder_items = await self._async_get_media_source_folder_contents(
-                    slot.index, widget.media_source_folder
-                )
-                sources.extend(folder_items)
+            sources.extend(widget.image_paths)
 
             if not sources:
                 self._picture_images.pop(slot.index, None)
@@ -1378,32 +1371,6 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 )
             else:
                 self._picture_images.pop(slot.index, None)
-
-    async def _async_get_media_source_folder_contents(
-        self, slot_index: int, folder_uri: str
-    ) -> list[str]:
-        """Browse a media source folder and return image URIs (cached, refreshed every 10 cycles).
-
-        Folder contents are re-fetched every 10 update cycles so new images appear automatically.
-        """
-        counter = self._media_source_folder_counters.get(slot_index, 0)
-        if counter == 0 or slot_index not in self._media_source_folder_contents:
-            try:
-                from homeassistant.components.media_source import async_browse_media
-
-                result = await async_browse_media(self.hass, folder_uri)
-                # Collect playable items (skip sub-folders)
-                items: list[str] = [
-                    child.media_content_id
-                    for child in (result.children or [])
-                    if not child.can_expand and child.media_content_id
-                ]
-                self._media_source_folder_contents[slot_index] = items
-                _LOGGER.debug("Browsed media source folder %s: %d items", folder_uri, len(items))
-            except Exception as e:
-                _LOGGER.debug("Failed to browse media source folder %s: %s", folder_uri, e)
-        self._media_source_folder_counters[slot_index] = (counter + 1) % 10
-        return self._media_source_folder_contents.get(slot_index, [])
 
     async def _async_fetch_picture_source(self, source: str) -> bytes | None:
         """Fetch image bytes from an entity ID or media-source:// URI."""
