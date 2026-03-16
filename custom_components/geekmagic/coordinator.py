@@ -152,6 +152,13 @@ BINARY_OFF_STATES = frozenset(
 )
 
 
+def _read_bytes(path: str) -> bytes:
+    """Read a file from disk and return its raw bytes (runs in executor)."""
+    from pathlib import Path
+
+    return Path(path).read_bytes()
+
+
 def extract_numeric_values(history_states: list) -> list[float]:
     """Extract numeric values from recorder history states.
 
@@ -1415,25 +1422,63 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         return None
 
     async def _async_fetch_media_source_image(self, media_content_id: str) -> bytes | None:
-        """Resolve a media-source:// URI and fetch the image bytes."""
+        """Resolve a media-source:// URI and fetch the image bytes.
+
+        For local HA media files (media-source://media_source/local/...) the file
+        is read directly from the filesystem to avoid auth/URL-resolution issues.
+        For other media sources the URL returned by async_resolve_media is fetched
+        via HTTP.
+        """
+        _local_prefix = "media-source://media_source/local/"
+        if media_content_id.startswith(_local_prefix):
+            rel_path = media_content_id[len(_local_prefix) :]
+            media_dirs: dict[str, str] = getattr(self.hass.config, "media_dirs", {})
+            local_dir = media_dirs.get("local")
+            if not local_dir:
+                _LOGGER.warning(
+                    "Cannot resolve local media path for %s: media_dirs not available",
+                    media_content_id,
+                )
+                return None
+            from pathlib import Path
+
+            file_path = str(Path(local_dir) / rel_path)
+            try:
+                return await self.hass.async_add_executor_job(_read_bytes, file_path)
+            except Exception as e:
+                _LOGGER.warning("Failed to read local media file %s: %s", file_path, e)
+                return None
+
+        # Non-local media source (e.g. Immich): resolve to URL and fetch via HTTP
         try:
             from homeassistant.components.media_source import async_resolve_media
 
             result = await async_resolve_media(self.hass, media_content_id, None)
             url: str = result.url
             if url.startswith("/"):
-                base_url = self.hass.config.internal_url or getattr(
-                    self.hass.config, "external_url", None
-                )
-                if not base_url:
+                from homeassistant.helpers.network import NoURLAvailableError, get_url
+
+                try:
+                    base_url = get_url(self.hass, allow_internal=True, allow_external=True)
+                except NoURLAvailableError:
+                    _LOGGER.warning(
+                        "No HA URL available to fetch media source image %s",
+                        media_content_id,
+                    )
                     return None
                 url = f"{base_url.rstrip('/')}{url}"
             session = async_get_clientsession(self.hass)
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
                     return await response.read()
+                _LOGGER.warning(
+                    "HTTP %d fetching media source image %s from %s",
+                    response.status,
+                    media_content_id,
+                    url,
+                )
         except Exception as e:
-            _LOGGER.debug("Failed to fetch media source image %s: %s", media_content_id, e)
+            _LOGGER.warning("Failed to fetch media source image %s: %s", media_content_id, e)
         return None
 
     async def _async_fetch_url_image_to_cache(self, source: str) -> None:
