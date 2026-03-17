@@ -171,6 +171,7 @@ def IconValue(
     value_color: Color = THEME_TEXT_PRIMARY,
     label_color: Color = THEME_TEXT_SECONDARY,
     icon_size: int | None = None,
+    layout: str = "auto",
 ) -> Component:
     """Icon with value and label - uses IconValueDisplay for proper sizing.
 
@@ -182,6 +183,7 @@ def IconValue(
         value_color: Value text color
         label_color: Label text color
         icon_size: Optional fixed icon size
+        layout: "auto", "stacked" (icon top/value/label), or "horizontal" (icon left)
 
     Returns:
         IconValueDisplay component
@@ -194,6 +196,7 @@ def IconValue(
         value_color=value_color,
         label_color=label_color,
         icon_size=icon_size,
+        layout=layout,
     )
 
 

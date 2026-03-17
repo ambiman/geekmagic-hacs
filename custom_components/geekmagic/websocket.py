@@ -71,6 +71,13 @@ WIDGET_TYPE_SCHEMAS: dict[str, dict[str, Any]] = {
             {"key": "icon", "type": "icon", "label": "Icon Override"},
             {"key": "show_panel", "type": "boolean", "label": "Panel Background", "default": False},
             {
+                "key": "layout",
+                "type": "select",
+                "label": "Icon Layout",
+                "options": ["auto", "stacked", "horizontal"],
+                "default": "auto",
+            },
+            {
                 "key": "precision",
                 "type": "number",
                 "label": "Decimal Places",
@@ -828,9 +835,17 @@ async def ws_preview_render(
         slot = widget_data.get("slot", 0)
         opts = widget_data.get("options", {})
 
-        # Build candidate sources: entity_ids first, then image_paths
-        sources: list[str] = [e for e in opts.get("entity_ids", []) if e]
-        sources += [p for p in opts.get("image_paths", []) if p]
+        # Build candidate sources: entity_ids first, then image_paths.
+        # image_paths entries may be raw ha-selector[media] dicts with
+        # media_content_id key — normalize them to plain strings.
+        sources: list[str] = [e for e in opts.get("entity_ids", []) if isinstance(e, str) and e]
+        for p in opts.get("image_paths", []):
+            if isinstance(p, str) and p:
+                sources.append(p)
+            elif isinstance(p, dict):
+                url = str(p.get("url") or p.get("media_content_id") or "")
+                if url:
+                    sources.append(url)
 
         if not sources:
             continue

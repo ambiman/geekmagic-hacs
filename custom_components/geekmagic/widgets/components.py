@@ -939,7 +939,8 @@ class PriorityRow(Component):
 class IconValueDisplay(Component):
     """Icon with value and label - handles layout internally for proper sizing.
 
-    Vertical layout: Icon at top, value in middle (fills space), label at bottom.
+    Vertical layout (stacked): Icon at top, value in middle (fills space), label at bottom.
+    Horizontal layout: Icon on left, label above value on right.
     All sizing is computed together to ensure proper proportions.
     """
 
@@ -950,34 +951,45 @@ class IconValueDisplay(Component):
     value_color: tuple[int, int, int] = THEME_TEXT_PRIMARY
     label_color: tuple[int, int, int] = THEME_TEXT_SECONDARY
     icon_size: int | None = None
+    layout: str = "auto"  # "auto", "stacked", or "horizontal"
 
     def measure(self, ctx: RenderContext, max_width: int, max_height: int) -> tuple[int, int]:
         return (max_width, max_height)
 
     def render(self, ctx: RenderContext, x: int, y: int, width: int, height: int) -> None:
         """Render icon, value, and label with proper proportions."""
+        # Determine effective layout
+        effective_layout = self.layout
+        if effective_layout == "auto":
+            # Use horizontal when the slot is taller than wide (portrait) to
+            # maximise the value font size in narrow grid cells.
+            effective_layout = "horizontal" if height > width else "stacked"
+
+        if effective_layout == "horizontal":
+            self._render_horizontal(ctx, x, y, width, height)
+        else:
+            self._render_stacked(ctx, x, y, width, height)
+
+    def _render_stacked(self, ctx: RenderContext, x: int, y: int, width: int, height: int) -> None:
+        """Icon top → value → label bottom."""
         padding = int(width * 0.06)
         inner_width = width - padding * 2
         inner_height = height - padding * 2
 
-        # Resolve theme-aware colors
         icon_color = _resolve_color(self.icon_color, ctx)
         value_color = _resolve_color(self.value_color, ctx)
         label_color = _resolve_color(self.label_color, ctx)
 
-        # Calculate sizes based on container
         icon_size = self.icon_size or max(16, min(48, int(inner_height * 0.25)))
         label_height = int(inner_height * 0.15)
         value_height = inner_height - icon_size - label_height - 12  # gaps
 
-        # Vertical positions (centered)
         total_content = icon_size + value_height + label_height + 12
         start_y = y + padding + (inner_height - total_content) // 2
 
         center_x = x + width // 2
         current_y = start_y
 
-        # Draw icon at top
         ctx.draw_icon(
             self.icon,
             (center_x - icon_size // 2, current_y),
@@ -986,7 +998,6 @@ class IconValueDisplay(Component):
         )
         current_y += icon_size + 6
 
-        # Draw value (fills available space)
         value_font = ctx.fit_text(
             self.value,
             max_width=int(inner_width * 0.95),
@@ -1002,7 +1013,6 @@ class IconValueDisplay(Component):
         )
         current_y += value_height + 6
 
-        # Draw label at bottom
         label_font = ctx.fit_text(
             self.label.upper(),
             max_width=int(inner_width * 0.90),
@@ -1015,6 +1025,69 @@ class IconValueDisplay(Component):
             font=label_font,
             color=label_color,
             anchor="mm",
+        )
+
+    def _render_horizontal(
+        self, ctx: RenderContext, x: int, y: int, width: int, height: int
+    ) -> None:
+        """Icon left, label (small, top-right) + value (fills right)."""
+        padding = int(min(width, height) * 0.05)
+        inner_width = width - padding * 2
+        inner_height = height - padding * 2
+
+        icon_color = _resolve_color(self.icon_color, ctx)
+        value_color = _resolve_color(self.value_color, ctx)
+        label_color = _resolve_color(self.label_color, ctx)
+
+        # Left column: icon area (~28% of width, min 18px)
+        icon_col_w = max(18, int(inner_width * 0.28))
+        icon_size = self.icon_size or max(14, min(icon_col_w - 4, int(inner_height * 0.35)))
+
+        # Draw icon, vertically centred in the left column
+        icon_x = x + padding + (icon_col_w - icon_size) // 2
+        icon_y = y + padding + (inner_height - icon_size) // 2
+        ctx.draw_icon(self.icon, (icon_x, icon_y), size=icon_size, color=icon_color)
+
+        # Right column: remaining width
+        text_x = x + padding + icon_col_w + 4
+        text_w = inner_width - icon_col_w - 4
+
+        # Reserve space for label if present
+        has_label = bool(self.label)
+        label_h = int(inner_height * 0.22) if has_label else 0
+        gap = 4 if has_label else 0
+        value_h = inner_height - label_h - gap
+
+        current_y = y + padding
+
+        if has_label:
+            label_font = ctx.fit_text(
+                self.label.upper(),
+                max_width=int(text_w * 0.95),
+                max_height=int(label_h * 0.88),
+                bold=False,
+            )
+            ctx.draw_text(
+                self.label.upper(),
+                (text_x, current_y + label_h // 2),
+                font=label_font,
+                color=label_color,
+                anchor="lm",
+            )
+            current_y += label_h + gap
+
+        value_font = ctx.fit_text(
+            self.value,
+            max_width=int(text_w * 0.95),
+            max_height=int(value_h * 0.88),
+            bold=True,
+        )
+        ctx.draw_text(
+            self.value,
+            (text_x, current_y + value_h // 2),
+            font=value_font,
+            color=value_color,
+            anchor="lm",
         )
 
 

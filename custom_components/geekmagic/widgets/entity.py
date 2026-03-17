@@ -50,6 +50,8 @@ class EntityWidget(Widget):
         self.precision = config.options.get("precision")  # Decimal places for numeric values
         # Attribute to read value from (instead of state)
         self.attribute = config.options.get("attribute")
+        # Layout: "auto", "stacked" (icon top), or "horizontal" (icon left)
+        self.layout: str = config.options.get("layout", "auto")
 
     def render(self, ctx: RenderContext, state: WidgetState) -> Component:
         """Render the entity widget."""
@@ -99,6 +101,7 @@ class EntityWidget(Widget):
                 color=color,
                 value_color=THEME_TEXT_PRIMARY,
                 label_color=THEME_TEXT_SECONDARY,
+                layout=self.layout,
             )
         else:
             content = CenteredValue(
