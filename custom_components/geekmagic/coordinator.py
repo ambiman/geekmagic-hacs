@@ -99,6 +99,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Module-level cycle state for picture widgets, keyed by "{entry_id}_{slot_index}".
+# Stored at module level (not on the coordinator instance) so it survives
+# coordinator restarts caused by aiohttp "Session is closed" errors.
+_PICTURE_CYCLE_STATE: dict[str, int] = {}
+
 # Config key for new global views format
 CONF_ASSIGNED_VIEWS = "assigned_views"
 
@@ -231,7 +236,6 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         self._chart_history: dict[str, list[float]] = {}  # Pre-fetched chart history
         self._weather_forecasts: dict[str, list[dict[str, Any]]] = {}  # Pre-fetched forecasts
         self._picture_images: dict[int, bytes] = {}  # Pre-fetched picture images keyed by slot
-        self._picture_cycle_indices: dict[int, int] = {}  # Cycle index per slot
         self._update_preview: bool = True  # Update preview on next refresh
         self._preview_just_updated: bool = False  # True if preview was updated in last refresh
 
@@ -1374,22 +1378,41 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                 self._picture_images.pop(slot.index, None)
                 continue
 
-            # Determine which source to show this cycle and advance index
-            current_idx = self._picture_cycle_indices.get(slot.index, 0) % len(sources)
+            # Determine which source to show this cycle and advance the index.
+            # _PICTURE_CYCLE_STATE is module-level so it survives coordinator
+            # restarts caused by aiohttp "Session is closed" errors.
+            state_key = f"{self.config_entry.entry_id}_{slot.index}"
+            current_idx = _PICTURE_CYCLE_STATE.get(state_key, 0) % len(sources)
             source = sources[current_idx]
-            self._picture_cycle_indices[slot.index] = (current_idx + 1) % len(sources)
+            # Only advance when there are multiple sources — a single-source slot
+            # would always compute (x+1)%1 == 0 and silently reset the counter.
+            if len(sources) > 1:
+                _PICTURE_CYCLE_STATE[state_key] = (current_idx + 1) % len(sources)
+
+            _LOGGER.debug(
+                "Picture slot %d: cycle idx=%d/%d source=%r",
+                slot.index,
+                current_idx,
+                len(sources),
+                source,
+            )
 
             image_bytes = await self._async_fetch_picture_source(source)
 
             if image_bytes:
                 self._picture_images[slot.index] = image_bytes
                 _LOGGER.debug(
-                    "Fetched picture image for slot %d (%s): %d bytes",
+                    "Picture slot %d: fetched %d bytes from %r",
                     slot.index,
-                    source,
                     len(image_bytes),
+                    source,
                 )
             else:
+                _LOGGER.debug(
+                    "Picture slot %d: fetch returned None for %r, clearing image",
+                    slot.index,
+                    source,
+                )
                 self._picture_images.pop(slot.index, None)
 
     async def _async_fetch_picture_source(self, source: str) -> bytes | None:  # noqa: PLR0911
@@ -1457,7 +1480,11 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
         """
         _local_prefix = "media-source://media_source/local/"
         if media_content_id.startswith(_local_prefix):
-            rel_path = media_content_id[len(_local_prefix) :]
+            from pathlib import Path
+            from urllib.parse import unquote
+
+            # URL-decode to handle filenames with spaces or special characters
+            rel_path = unquote(media_content_id[len(_local_prefix) :])
             media_dirs: dict[str, str] = getattr(self.hass.config, "media_dirs", {})
             local_dir = media_dirs.get("local")
             if not local_dir:
@@ -1466,9 +1493,9 @@ class GeekMagicCoordinator(DataUpdateCoordinator):
                     media_content_id,
                 )
                 return None
-            from pathlib import Path
 
             file_path = str(Path(local_dir) / rel_path)
+            _LOGGER.debug("Reading local media file: %s", file_path)
             try:
                 return await self.hass.async_add_executor_job(_read_bytes, file_path)
             except Exception as e:

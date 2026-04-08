@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from .base import Widget, WidgetConfig
 from .camera import CameraImage, _camera_placeholder
 from .components import THEME_TEXT_PRIMARY
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..render_context import RenderContext
@@ -41,6 +44,24 @@ class PictureWidget(Widget):
                 url = str(p.get("url") or p.get("media_content_id") or "")
                 if url:
                     self.image_paths.append(url)
+                else:
+                    _LOGGER.warning(
+                        "PictureWidget: skipping image_paths entry with unknown dict format: %r",
+                        p,
+                    )
+            elif p:
+                _LOGGER.warning(
+                    "PictureWidget: skipping image_paths entry with unexpected type %s: %r",
+                    type(p).__name__,
+                    p,
+                )
+
+        _LOGGER.debug(
+            "PictureWidget slot=%s: raw_paths=%r -> image_paths=%r",
+            config.slot,
+            raw_paths,
+            self.image_paths,
+        )
 
         self.fit: str = config.options.get("fit", "contain")
         self.show_label: bool = config.options.get("show_label", False)
