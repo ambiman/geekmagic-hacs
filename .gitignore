@@ -51,5 +51,8 @@ htmlcov/
 home-assistant.log
 home-assistant_v2.db
 
+# Claude Code
+.claude/
+
 # macOS
 .DS_Store
