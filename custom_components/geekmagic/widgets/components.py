@@ -19,15 +19,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from stretchable import Edge, Node
-from stretchable.style import (
-    AUTO,
-    PCT,
-    AlignItems,
-    FlexDirection,
-    JustifyContent,
-)
-
 if TYPE_CHECKING:
     from ..render_context import RenderContext
 
@@ -51,29 +42,6 @@ def _resolve_color(color: Color, ctx: RenderContext) -> Color:
 
 Align = Literal["start", "center", "end", "stretch"]
 Justify = Literal["start", "center", "end", "space-between", "space-around"]
-
-
-def _to_justify(justify: Justify) -> JustifyContent:
-    """Convert justify string to stretchable enum."""
-    mapping = {
-        "start": JustifyContent.START,
-        "center": JustifyContent.CENTER,
-        "end": JustifyContent.END,
-        "space-between": JustifyContent.SPACE_BETWEEN,
-        "space-around": JustifyContent.SPACE_AROUND,
-    }
-    return mapping.get(justify, JustifyContent.START)
-
-
-def _to_align(align: Align) -> AlignItems:
-    """Convert align string to stretchable enum."""
-    mapping = {
-        "start": AlignItems.START,
-        "center": AlignItems.CENTER,
-        "end": AlignItems.END,
-        "stretch": AlignItems.STRETCH,
-    }
-    return mapping.get(align, AlignItems.CENTER)
 
 
 # ============================================================================
@@ -410,7 +378,6 @@ class Row(Component):
         return (min(total_width, max_width), min(max_h + self.padding * 2, max_height))
 
     def render(self, ctx: RenderContext, x: int, y: int, width: int, height: int) -> None:
-        # Filter out None children
         children = [c for c in self.children if c is not None]
         if not children:
             return
@@ -420,39 +387,69 @@ class Row(Component):
         inner_w = width - self.padding * 2
         inner_h = height - self.padding * 2
 
-        # Build stretchable layout tree
-        root = Node(
-            flex_direction=FlexDirection.ROW,
-            justify_content=_to_justify(self.justify),
-            align_items=_to_align(self.align),
-            gap=self.gap,
-            size=(inner_w, inner_h),
-        )
-
-        for i, child in enumerate(children):
-            cw, ch = child.measure(ctx, inner_w, inner_h)
+        measured_w: list[int] = []
+        measured_h: list[int] = []
+        for child in children:
             if isinstance(child, Spacer):
-                root.add(Node(key=f"c{i}", flex_grow=1, size=(AUTO, 100 * PCT)))
+                measured_w.append(0)
+                measured_h.append(inner_h)
             elif self.align == "stretch":
-                # Stretch to full container height
-                root.add(Node(key=f"c{i}", size=(cw, 100 * PCT)))
+                cw, _ = child.measure(ctx, inner_w, inner_h)
+                measured_w.append(cw)
+                measured_h.append(inner_h)
             else:
-                # Use measured height to preserve aspect ratios
-                root.add(Node(key=f"c{i}", size=(cw, ch)))
+                cw, ch = child.measure(ctx, inner_w, inner_h)
+                measured_w.append(cw)
+                measured_h.append(ch)
 
-        root.compute_layout()
+        is_spacer = [isinstance(c, Spacer) for c in children]
+        spacer_count = sum(is_spacer)
+        n = len(children)
+        total_gap = self.gap * (n - 1)
 
-        # Render children at computed positions
+        fixed_w = sum(w for w, sp in zip(measured_w, is_spacer) if not sp)
+        remaining = inner_w - fixed_w - total_gap
+        spacer_w = max(0, remaining // spacer_count) if spacer_count > 0 else 0
+        final_widths = [spacer_w if sp else w for w, sp in zip(measured_w, is_spacer)]
+
+        total_content = sum(final_widths) + total_gap
+        extra = inner_w - total_content
+        positions_x: list[int] = []
+        if self.justify == "space-between" and n > 1 and spacer_count == 0:
+            between = extra // (n - 1)
+            pos = 0
+            for i, fw in enumerate(final_widths):
+                positions_x.append(pos)
+                pos += fw + self.gap + (between if i < n - 1 else 0)
+        elif self.justify == "center" and spacer_count == 0:
+            pos = max(0, extra // 2)
+            for fw in final_widths:
+                positions_x.append(pos)
+                pos += fw + self.gap
+        elif self.justify == "end" and spacer_count == 0:
+            pos = max(0, extra)
+            for fw in final_widths:
+                positions_x.append(pos)
+                pos += fw + self.gap
+        else:
+            pos = 0
+            for fw in final_widths:
+                positions_x.append(pos)
+                pos += fw + self.gap
+
         for i, child in enumerate(children):
-            node = root.find(f"/c{i}")
-            box = node.get_box(Edge.CONTENT)
-            child.render(
-                ctx,
-                inner_x + int(box.x),
-                inner_y + int(box.y),
-                int(box.width),
-                int(box.height),
-            )
+            fw = final_widths[i]
+            fh = measured_h[i]
+            if self.align == "stretch":
+                cy = 0
+                fh = inner_h
+            elif self.align == "center":
+                cy = max(0, (inner_h - fh) // 2)
+            elif self.align == "end":
+                cy = max(0, inner_h - fh)
+            else:
+                cy = 0
+            child.render(ctx, inner_x + positions_x[i], inner_y + cy, fw, fh)
 
 
 @dataclass
@@ -482,7 +479,6 @@ class Column(Component):
         return (min(max_w + self.padding * 2, max_width), min(total_height, max_height))
 
     def render(self, ctx: RenderContext, x: int, y: int, width: int, height: int) -> None:
-        # Filter out None children
         children = [c for c in self.children if c is not None]
         if not children:
             return
@@ -492,39 +488,69 @@ class Column(Component):
         inner_w = width - self.padding * 2
         inner_h = height - self.padding * 2
 
-        # Build stretchable layout tree
-        root = Node(
-            flex_direction=FlexDirection.COLUMN,
-            justify_content=_to_justify(self.justify),
-            align_items=_to_align(self.align),
-            gap=self.gap,
-            size=(inner_w, inner_h),
-        )
-
-        for i, child in enumerate(children):
-            cw, ch = child.measure(ctx, inner_w, inner_h)
+        measured_w: list[int] = []
+        measured_h: list[int] = []
+        for child in children:
             if isinstance(child, Spacer):
-                root.add(Node(key=f"c{i}", flex_grow=1, size=(100 * PCT, AUTO)))
+                measured_w.append(inner_w)
+                measured_h.append(0)
             elif self.align == "stretch":
-                # Stretch to full container width
-                root.add(Node(key=f"c{i}", size=(100 * PCT, ch)))
+                _, ch = child.measure(ctx, inner_w, inner_h)
+                measured_w.append(inner_w)
+                measured_h.append(ch)
             else:
-                # Use measured width to preserve aspect ratios
-                root.add(Node(key=f"c{i}", size=(cw, ch)))
+                cw, ch = child.measure(ctx, inner_w, inner_h)
+                measured_w.append(cw)
+                measured_h.append(ch)
 
-        root.compute_layout()
+        is_spacer = [isinstance(c, Spacer) for c in children]
+        spacer_count = sum(is_spacer)
+        n = len(children)
+        total_gap = self.gap * (n - 1)
 
-        # Render children at computed positions
+        fixed_h = sum(h for h, sp in zip(measured_h, is_spacer) if not sp)
+        remaining = inner_h - fixed_h - total_gap
+        spacer_h = max(0, remaining // spacer_count) if spacer_count > 0 else 0
+        final_heights = [spacer_h if sp else h for h, sp in zip(measured_h, is_spacer)]
+
+        total_content = sum(final_heights) + total_gap
+        extra = inner_h - total_content
+        positions_y: list[int] = []
+        if self.justify == "space-between" and n > 1 and spacer_count == 0:
+            between = extra // (n - 1)
+            pos = 0
+            for i, fh in enumerate(final_heights):
+                positions_y.append(pos)
+                pos += fh + self.gap + (between if i < n - 1 else 0)
+        elif self.justify == "center" and spacer_count == 0:
+            pos = max(0, extra // 2)
+            for fh in final_heights:
+                positions_y.append(pos)
+                pos += fh + self.gap
+        elif self.justify == "end" and spacer_count == 0:
+            pos = max(0, extra)
+            for fh in final_heights:
+                positions_y.append(pos)
+                pos += fh + self.gap
+        else:
+            pos = 0
+            for fh in final_heights:
+                positions_y.append(pos)
+                pos += fh + self.gap
+
         for i, child in enumerate(children):
-            node = root.find(f"/c{i}")
-            box = node.get_box(Edge.CONTENT)
-            child.render(
-                ctx,
-                inner_x + int(box.x),
-                inner_y + int(box.y),
-                int(box.width),
-                int(box.height),
-            )
+            fw = measured_w[i]
+            fh = final_heights[i]
+            if self.align == "stretch":
+                cx = 0
+                fw = inner_w
+            elif self.align == "center":
+                cx = max(0, (inner_w - fw) // 2)
+            elif self.align == "end":
+                cx = max(0, inner_w - fw)
+            else:
+                cx = 0
+            child.render(ctx, inner_x + cx, inner_y + positions_y[i], fw, fh)
 
 
 @dataclass

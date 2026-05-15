@@ -10,7 +10,6 @@ dependencies = [
     "pillow>=10.0.0",
     "aiohttp>=3.8.0",
     "palettable>=3.3.0",
-    "stretchable>=1.0.0",
 ]
 
 [project.optional-dependencies]

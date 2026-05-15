@@ -1,27 +1,19 @@
-"""Flexbox layout helpers using Stretchable (Taffy bindings).
+"""Flexbox layout helpers - pure Python implementation.
 
 This module provides CSS Flexbox layout calculations for widget rendering.
-Stretchable gives us a battle-tested layout engine for automatic element
-positioning and responsive design.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import TYPE_CHECKING
-
-from stretchable import Edge, Node
-from stretchable.style import (
-    AUTO,
-    PCT,
-    AlignItems,
-    FlexDirection,
-    JustifyContent,
-)
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from ..render_context import RenderContext
+
+Justify = Literal["start", "center", "end", "space-between", "space-around"]
+Align = Literal["start", "center", "end", "stretch"]
 
 
 class Priority(IntEnum):
@@ -82,30 +74,16 @@ def create_vertical_layout(
     Returns:
         Dict of element_name -> LayoutBox with computed positions
     """
-    root = Node(
-        flex_direction=FlexDirection.COLUMN,
-        size=(width, height),
-    )
+    flex_count = sum(1 for h in elements.values() if h is None)
+    fixed_total = sum(h for h in elements.values() if h is not None)
+    flex_h = max(0, (height - fixed_total) // flex_count) if flex_count > 0 else 0
 
+    result: dict[str, LayoutBox] = {}
+    current_y = 0
     for name, elem_height in elements.items():
-        if elem_height is None:
-            root.add(Node(key=name, size=(100 * PCT, AUTO), flex_grow=1))
-        else:
-            root.add(Node(key=name, size=(100 * PCT, elem_height)))
-
-    root.compute_layout()
-
-    result = {}
-    for name in elements:
-        node = root.find(f"/{name}")
-        box = node.get_box(Edge.CONTENT)
-        result[name] = LayoutBox(
-            x=int(box.x),
-            y=int(box.y),
-            width=int(box.width),
-            height=int(box.height),
-        )
-
+        h = flex_h if elem_height is None else elem_height
+        result[name] = LayoutBox(x=0, y=current_y, width=width, height=h)
+        current_y += h
     return result
 
 
@@ -113,8 +91,8 @@ def create_horizontal_layout(
     width: int,
     height: int,
     elements: dict[str, int | None],
-    justify: JustifyContent = JustifyContent.SPACE_BETWEEN,
-    align: AlignItems = AlignItems.CENTER,
+    justify: Justify = "space-between",
+    align: Align = "center",
 ) -> dict[str, LayoutBox]:
     """Create horizontal (row) flexbox layout.
 
@@ -125,38 +103,55 @@ def create_horizontal_layout(
         width: Container width in pixels
         height: Container height in pixels
         elements: Dict of element_name -> fixed_width (None for flex)
-        justify: Flexbox justify-content value
-        align: Flexbox align-items value
+        justify: How to distribute space ("start", "center", "end", "space-between")
+        align: Cross-axis alignment (unused, kept for API compatibility)
 
     Returns:
         Dict of element_name -> LayoutBox with computed positions
     """
-    root = Node(
-        flex_direction=FlexDirection.ROW,
-        justify_content=justify,
-        align_items=align,
-        size=(width, height),
-    )
+    flex_count = sum(1 for w in elements.values() if w is None)
+    fixed_total = sum(w for w in elements.values() if w is not None)
+    n = len(elements)
 
-    for name, elem_width in elements.items():
-        if elem_width is None:
-            root.add(Node(key=name, size=(AUTO, 100 * PCT), flex_grow=1))
-        else:
-            root.add(Node(key=name, size=(elem_width, 100 * PCT)))
+    if flex_count > 0:
+        # Flex items fill remaining space equally
+        flex_w = max(0, (width - fixed_total) // flex_count)
+        result: dict[str, LayoutBox] = {}
+        current_x = 0
+        for name, elem_width in elements.items():
+            w = flex_w if elem_width is None else elem_width
+            result[name] = LayoutBox(x=current_x, y=0, width=w, height=height)
+            current_x += w
+        return result
 
-    root.compute_layout()
+    # All fixed widths - distribute extra space based on justify
+    extra = width - fixed_total
+    positions: list[int] = []
+    if justify == "space-between" and n > 1:
+        between = extra // (n - 1)
+        pos = 0
+        for i, w in enumerate(elements.values()):
+            positions.append(pos)
+            pos += (w or 0) + (between if i < n - 1 else 0)
+    elif justify == "center":
+        pos = max(0, extra // 2)
+        for w in elements.values():
+            positions.append(pos)
+            pos += w or 0
+    elif justify == "end":
+        pos = max(0, extra)
+        for w in elements.values():
+            positions.append(pos)
+            pos += w or 0
+    else:  # start
+        pos = 0
+        for w in elements.values():
+            positions.append(pos)
+            pos += w or 0
 
     result = {}
-    for name in elements:
-        node = root.find(f"/{name}")
-        box = node.get_box(Edge.CONTENT)
-        result[name] = LayoutBox(
-            x=int(box.x),
-            y=int(box.y),
-            width=int(box.width),
-            height=int(box.height),
-        )
-
+    for (name, elem_width), x_pos in zip(elements.items(), positions):
+        result[name] = LayoutBox(x=x_pos, y=0, width=elem_width or 0, height=height)
     return result
 
 
@@ -233,7 +228,7 @@ def layout_bar_gauge(
             content_width,
             header_height,
             header_elements,
-            justify=JustifyContent.SPACE_BETWEEN,
+            justify="space-between",
         )
 
         # Build result with header boxes offset by padding
@@ -319,7 +314,7 @@ def layout_icon_value_label(
             content_width,
             content_height,
             elements,
-            justify=JustifyContent.SPACE_BETWEEN,
+            justify="space-between",
         )
 
         for box in boxes.values():
