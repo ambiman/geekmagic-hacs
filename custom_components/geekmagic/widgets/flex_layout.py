@@ -150,7 +150,7 @@ def create_horizontal_layout(
             pos += w or 0
 
     result = {}
-    for (name, elem_width), x_pos in zip(elements.items(), positions):
+    for (name, elem_width), x_pos in zip(elements.items(), positions, strict=True):
         result[name] = LayoutBox(x=x_pos, y=0, width=elem_width or 0, height=height)
     return result
 

@@ -407,10 +407,10 @@ class Row(Component):
         n = len(children)
         total_gap = self.gap * (n - 1)
 
-        fixed_w = sum(w for w, sp in zip(measured_w, is_spacer) if not sp)
+        fixed_w = sum(w for w, sp in zip(measured_w, is_spacer, strict=True) if not sp)
         remaining = inner_w - fixed_w - total_gap
         spacer_w = max(0, remaining // spacer_count) if spacer_count > 0 else 0
-        final_widths = [spacer_w if sp else w for w, sp in zip(measured_w, is_spacer)]
+        final_widths = [spacer_w if sp else w for w, sp in zip(measured_w, is_spacer, strict=True)]
 
         total_content = sum(final_widths) + total_gap
         extra = inner_w - total_content
@@ -508,10 +508,10 @@ class Column(Component):
         n = len(children)
         total_gap = self.gap * (n - 1)
 
-        fixed_h = sum(h for h, sp in zip(measured_h, is_spacer) if not sp)
+        fixed_h = sum(h for h, sp in zip(measured_h, is_spacer, strict=True) if not sp)
         remaining = inner_h - fixed_h - total_gap
         spacer_h = max(0, remaining // spacer_count) if spacer_count > 0 else 0
-        final_heights = [spacer_h if sp else h for h, sp in zip(measured_h, is_spacer)]
+        final_heights = [spacer_h if sp else h for h, sp in zip(measured_h, is_spacer, strict=True)]
 
         total_content = sum(final_heights) + total_gap
         extra = inner_h - total_content
